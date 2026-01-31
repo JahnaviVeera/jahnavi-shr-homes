@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+﻿import type { Request, Response, NextFunction } from "express";
 const UserServices = require("./user.services");
 
 /**
@@ -39,7 +39,7 @@ const UserServices = require("./user.services");
  *         description: Forbidden - Admin privileges required
  */
 //POST
-exports.createUser = async (req: Request, res: Response) => {
+exports.createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userData = await UserServices.createUser(req.body);
 
@@ -49,10 +49,7 @@ exports.createUser = async (req: Request, res: Response) => {
             data: userData,
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
+        next(error);
     }
 };
 
@@ -90,7 +87,7 @@ exports.createUser = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETBYID
-exports.getuserById = async (req: Request, res: Response) => {
+exports.getuserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.params.userId
         const user = await UserServices.getUserById(userId);
@@ -101,10 +98,7 @@ exports.getuserById = async (req: Request, res: Response) => {
             data: user
         })
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        })
+        next(error);
     }
 
 }
@@ -143,7 +137,7 @@ exports.getuserById = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETALL
-exports.getAllUsers = async (req: Request, res: Response) => {
+exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { search } = req.query;
         const users = await UserServices.getAllUsers(search as string);
@@ -154,10 +148,7 @@ exports.getAllUsers = async (req: Request, res: Response) => {
         })
 
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        })
+        next(error);
     }
 }
 
@@ -1156,6 +1147,10 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
     }
 };
 
+const AnalyticsServices = require("../analytics/analytics.services");
+
+// ... existing code ...
+
 /**
  * @swagger
  * /api/user/leads/stats:
@@ -1168,19 +1163,16 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
  *       200:
  *         description: Stats fetched successfully
  */
-exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
+exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const stats = await UserServices.getCustomerLeadsStats();
+        const stats = await AnalyticsServices.getCustomerLeadsStats();
         return res.status(200).json({
             success: true,
             message: "Customer leads stats fetched successfully",
             data: stats
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -1196,19 +1188,16 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
  *       200:
  *         description: New leads fetched successfully
  */
-exports.getNewLeads = async (req: Request, res: Response) => {
+exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const leads = await UserServices.getNewLeadsList();
+        const leads = await AnalyticsServices.getNewLeadsList();
         return res.status(200).json({
             success: true,
             message: "New leads fetched successfully",
             data: leads
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -1224,18 +1213,15 @@ exports.getNewLeads = async (req: Request, res: Response) => {
  *       200:
  *         description: Closed customers fetched successfully
  */
-exports.getClosedCustomers = async (req: Request, res: Response) => {
+exports.getClosedCustomers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const customers = await UserServices.getClosedCustomersList();
+        const customers = await AnalyticsServices.getClosedCustomersList();
         return res.status(200).json({
             success: true,
             message: "Closed customers fetched successfully",
             data: customers
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };

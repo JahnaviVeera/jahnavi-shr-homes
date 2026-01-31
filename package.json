@@ -13,7 +13,8 @@
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:deploy": "npx prisma migrate deploy",
     "setup:bucket": "npx ts-node src/scripts/createSupabaseBucket.ts",
-    "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts"
+    "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts",
+    "seed:admin": "npx ts-node src/scripts/seed-admin.ts"
   },
   "keywords": [],
   "author": "",
@@ -41,7 +42,8 @@
     "reflect-metadata": "^0.2.2",
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

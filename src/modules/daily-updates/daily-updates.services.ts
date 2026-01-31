@@ -3,6 +3,8 @@ import { fileUploadService } from "../../services/fileUpload.service";
 import { ConstructionStage, DailyUpdateStatus, Prisma } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import SocketService from "../../services/socket.service";
+import * as projectService from "../project/project.services";
+import * as supervisorService from "../supervisor/supervisor.services";
 
 /**
  * Create a new daily update
@@ -61,11 +63,8 @@ export const createDailyUpdate = async (
     let validProjectId: string | null = null;
     let projectName = "";
     if (data.projectId && data.projectId.trim() !== "") {
-        // Check if project exists
-        const project = await prisma.project.findUnique({ where: { projectId: data.projectId } });
-        if (!project) {
-            throw new Error(`Project with ID ${data.projectId} not found`);
-        }
+        // Check if project exists (Decoupled)
+        const project = await projectService.getProjectById(data.projectId);
         validProjectId = data.projectId;
         projectName = project.projectName;
     }
@@ -185,52 +184,43 @@ export const getAllDailyUpdates = async () => {
  * @returns List of daily updates for assigned projects
  */
 export const getDailyUpdatesForSupervisor = async (supervisorId: string) => {
-    // 1. Get the project assigned to this supervisor
-    // 1. Get the projects assigned to this supervisor
-    const supervisor = await prisma.supervisor.findUnique({
-        where: { supervisorId },
-        select: {
-            projects: {
-                select: { projectId: true }
-            }
-        }
-    });
-
-    if (!supervisor || !supervisor.projects || supervisor.projects.length === 0) {
-        return [];
-    }
-
-    const projectIds = supervisor.projects.map(p => p.projectId);
-
-    const assignedProjects = await prisma.project.findMany({
-        where: { projectId: { in: projectIds } },
-        include: {
-            dailyUpdates: {
-                where: { status: DailyUpdateStatus.approved },
-                select: { constructionStage: true }
-            }
-        }
-    });
+    // 1. Get the projects assigned to this supervisor (Decoupled)
+    const assignedProjects = await projectService.getProjectsBySupervisorId(supervisorId);
 
     if (assignedProjects.length === 0) {
         return [];
     }
 
+    const projectIds = assignedProjects.map(p => p.projectId);
+
+    // Fetch Daily Updates for these projects
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: { in: projectIds }
+        },
+        select: {
+            projectId: true,
+            constructionStage: true,
+            status: true,
+            updatedAt: true,
+            createdAt: true
+        }
+    });
+
     // 2. Calculate progress for each project
     const projectsWithProgress = assignedProjects.map(project => {
+        // Filter updates for this project that are APPROVED
+        const projectUpdates = dailyUpdates.filter(u => u.projectId === project.projectId && u.status === DailyUpdateStatus.approved);
+
         // Count unique approved stages
-        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
+        const uniqueStages = new Set(projectUpdates.map(u => u.constructionStage));
         const totalStages = 6; // Total number of construction stages defined in enum
 
         // Calculate percentage (capped at 100)
         const progress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
 
-        // Remove dailyUpdates from the result to keep it clean, or we can keep it if needed.
-        // The requirement is "calculate project progress", implying we return project info.
-        const { dailyUpdates, ...projectData } = project;
-
         return {
-            ...projectData,
+            ...project,
             progress
         };
     });
@@ -306,10 +296,8 @@ export const updateDailyUpdate = async (
     // Update projectId if provided
     if (updateData.projectId !== undefined) {
         if (updateData.projectId && updateData.projectId.trim() !== "") {
-            const project = await prisma.project.findUnique({ where: { projectId: updateData.projectId } });
-            if (!project) {
-                throw new Error(`Project with ID ${updateData.projectId} not found`);
-            }
+            // Check Project Exists (Decoupled)
+            await projectService.getProjectById(updateData.projectId);
             dataToUpdate.project = { connect: { projectId: updateData.projectId } };
         } else {
             dataToUpdate.project = { disconnect: true };
@@ -443,13 +431,8 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
         throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
     }
 
-    // Find all projects belonging to the user
-    const userProjects = await prisma.project.findMany({
-        where: {
-            customerId: userId
-        },
-        select: { projectId: true }
-    });
+    // Find all projects belonging to the user (Decoupled)
+    const userProjects = await projectService.getProjectsByCustomerId(userId);
 
     if (userProjects.length === 0) {
         return [];
@@ -487,33 +470,24 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
  * @returns The updated daily update record
  */
 export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
-    // Check if the daily update belongs to a project owned by the user
+    // Get Daily Update
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
-        include: {
-            project: {
-                include: {
-                    customer: {
-                        select: { userId: true, email: true }
-                    },
-                    supervisor: {
-                        select: { userId: true, email: true }
-                    }
-                }
-            }
-        }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    if (!dailyUpdate.project) {
+    if (!dailyUpdate.projectId) {
         throw new Error("Daily update is not linked to any project");
     }
 
+    // Decoupled Validation: Fetch project via service
+    const project = await projectService.getProjectById(dailyUpdate.projectId);
+
     // Check if user is the customer of the project
-    const isCustomer = dailyUpdate.project.customer?.userId === userId;
+    const isCustomer = project.customer?.userId === userId;
 
     if (!isCustomer) {
         throw new Error("Unauthorized: You can only approve updates for your own projects");
@@ -530,21 +504,21 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
     // Notify Admins
     SocketService.getInstance().emitToRole("admin", "daily_update_status", {
         status: "APPROVED",
-        projectName: dailyUpdate.project.projectName,
+        projectName: project.projectName,
         dailyUpdateId: dailyUpdate.dailyUpdateId
     });
 
     // Notify Supervisor
-    if (dailyUpdate.project.supervisor) {
-        SocketService.getInstance().emitToUser(dailyUpdate.project.supervisor.userId, "notification", {
+    if (project.supervisor) {
+        SocketService.getInstance().emitToUser(project.supervisor.userId, "notification", {
             type: "DAILY_UPDATE_APPROVED",
-            message: `Daily update for ${dailyUpdate.project.projectName} has been APPROVED by customer`,
+            message: `Daily update for ${project.projectName} has been APPROVED by customer`,
             dailyUpdateId: dailyUpdate.dailyUpdateId
         });
     }
 
     try {
-        const projectName = dailyUpdate.project.projectName || "Unknown Project";
+        const projectName = project.projectName || "Unknown Project";
         await notifyAdmins(`Daily update for ${projectName} has been APPROVED by the customer`, "daily_update_approval");
     } catch (error) {
         console.error("Failed to send notification:", error);
@@ -561,33 +535,24 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
  * @returns The updated daily update record
  */
 export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
-    // Check if the daily update belongs to a project owned by the user
+    // Get Daily Update
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
-        include: {
-            project: {
-                include: {
-                    customer: {
-                        select: { userId: true, email: true }
-                    },
-                    supervisor: {
-                        select: { userId: true, email: true }
-                    }
-                }
-            }
-        }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    if (!dailyUpdate.project) {
+    if (!dailyUpdate.projectId) {
         throw new Error("Daily update is not linked to any project");
     }
 
+    // Decoupled Validation: Fetch project via service
+    const project = await projectService.getProjectById(dailyUpdate.projectId);
+
     // Check if user is the customer of the project
-    const isCustomer = dailyUpdate.project.customer?.userId === userId;
+    const isCustomer = project.customer?.userId === userId;
 
     if (!isCustomer) {
         throw new Error("Unauthorized: You can only reject updates for your own projects");
@@ -604,21 +569,21 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
     // Notify Admins
     SocketService.getInstance().emitToRole("admin", "daily_update_status", {
         status: "REJECTED",
-        projectName: dailyUpdate.project.projectName,
+        projectName: project.projectName,
         dailyUpdateId: dailyUpdate.dailyUpdateId
     });
 
     // Notify Supervisor
-    if (dailyUpdate.project.supervisor) {
-        SocketService.getInstance().emitToUser(dailyUpdate.project.supervisor.userId, "notification", {
+    if (project.supervisor) {
+        SocketService.getInstance().emitToUser(project.supervisor.userId, "notification", {
             type: "DAILY_UPDATE_REJECTED",
-            message: `Daily update for ${dailyUpdate.project.projectName} has been REJECTED by customer`,
+            message: `Daily update for ${project.projectName} has been REJECTED by customer`,
             dailyUpdateId: dailyUpdate.dailyUpdateId
         });
     }
 
     try {
-        const projectName = dailyUpdate.project.projectName || "Unknown Project";
+        const projectName = project.projectName || "Unknown Project";
         await notifyAdmins(`Daily update for ${projectName} has been REJECTED by the customer`, "daily_update_rejection");
     } catch (error) {
         console.error("Failed to send notification:", error);
@@ -634,25 +599,12 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
  * @returns Timeline with status and dates for each stage
  */
 export const getConstructionTimeline = async (projectId: string, supervisorId?: string) => {
-    // 1. Verify project exists
-    const project = await prisma.project.findUnique({ where: { projectId } });
-    if (!project) {
-        throw new Error(`Project with ID ${projectId} not found`);
-    }
+    // 1. Verify project exists (Decoupled)
+    const project = await projectService.getProjectById(projectId);
 
     // 2. If supervisorId is provided, check if project is assigned to this supervisor
     if (supervisorId) {
-        const supervisor = await prisma.supervisor.findUnique({
-            where: { supervisorId },
-            include: { projects: { select: { projectId: true } } }
-        });
-
-        if (!supervisor) {
-            throw new Error("Supervisor not found");
-        }
-
-        const isAssigned = supervisor.projects.some(p => p.projectId === projectId);
-        if (!isAssigned) {
+        if (project.supervisorId !== supervisorId) {
             throw new Error("Unauthorized: You are not assigned to this project");
         }
     }
@@ -723,16 +675,14 @@ export const getSupervisorStats = async (supervisorId: string) => {
         throw new Error("Supervisor ID is required");
     }
 
-    const supervisor = await prisma.supervisor.findUnique({
-        where: { supervisorId },
-        select: { projects: { select: { projectId: true } } }
-    });
+    // Decoupled: Get Supervisor's Projects via ProjectService
+    const projects = await projectService.getProjectsBySupervisorId(supervisorId);
 
-    if (!supervisor || !supervisor.projects || supervisor.projects.length === 0) {
+    if (projects.length === 0) {
         return { pending: 0, rejected: 0, approved: 0 };
     }
 
-    const projectIds = supervisor.projects.map(p => p.projectId);
+    const projectIds = projects.map(p => p.projectId);
 
     const pendingCount = await prisma.dailyUpdate.count({
         where: {

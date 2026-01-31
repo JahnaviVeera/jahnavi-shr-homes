@@ -1,6 +1,7 @@
 ﻿import prisma from "../../config/prisma.client";
 import { DocumentType } from "@prisma/client";
 import { fileUploadService } from "../../services/fileUpload.service";
+import * as projectService from "../project/project.services";
 
 export const createDocument = async (
     data: {
@@ -59,6 +60,8 @@ export const createDocument = async (
     };
 
     if (data.projectId) {
+        // Optionally validate project existence here using service?
+        // await projectService.getProjectById(data.projectId);
         createData.project = { connect: { projectId: data.projectId } };
     }
 
@@ -152,14 +155,13 @@ export const getDocumentsByProject = async (projectId: string) => {
         throw new Error("Project ID is required");
     }
 
-    // Get the project details
-    const project = await prisma.project.findUnique({
-        where: { projectId }
-    });
-
-    if (!project) {
-        throw new Error("Project not found");
-    }
+    // Get the project details (Decoupled)
+    const project = await projectService.getProjectById(projectId);
+    // getProjectById throws if not found
+    // If we want detailed fields not provided by getProjectById, we might technically need to ask project service for more,
+    // but getProjectById usually returns full object or mostly full.
+    // The previous code selected specific fields for `project` return object?
+    // "project: { projectId: project.projectId, projectName: ... }"
 
     // Get all documents for this project
     const documents = await prisma.document.findMany({
@@ -169,22 +171,7 @@ export const getDocumentsByProject = async (projectId: string) => {
         },
     });
 
-    if (!documents || documents.length === 0) {
-        return {
-            project: {
-                projectId: project.projectId,
-                projectName: project.projectName || "",
-                projectType: project.projectType || "",
-                location: project.location || "",
-                totalBudget: parseFloat(project.totalBudget.toString()) || 0,
-                startDate: project.startDate,
-                expectedCompletion: project.expectedCompletion,
-            },
-            documents: []
-        };
-    }
-
-    // Format documents with fileName and documentType name
+    // Reuse the mapping logic from original file
     const formattedDocuments = documents.map((doc: any) => ({
         documentId: doc.documentId,
         fileName: doc.fileName,
@@ -252,6 +239,8 @@ export const updateDocument = async (
     // Update project ID if provided
     if (updateData.projectId !== undefined) {
         if (updateData.projectId) {
+            // Validate via service?
+            await projectService.getProjectById(updateData.projectId);
             dataToUpdate.project = { connect: { projectId: updateData.projectId } };
         } else {
             dataToUpdate.project = { disconnect: true };
@@ -337,10 +326,7 @@ export const getDocumentFile = async (documentId: string) => {
     };
 };
 
-/**
- * Get total count of documents by type
- * Returns counts for Agreement, plans, permit, and others
- */
+
 export const getDocumentCountsByType = async () => {
     // Get counts for each document type
     const counts = await prisma.document.groupBy({
@@ -371,6 +357,3 @@ export const getDocumentCountsByType = async () => {
 
     return result;
 };
-
-
-

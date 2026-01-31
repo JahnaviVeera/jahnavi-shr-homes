@@ -1,0 +1,43 @@
+import { config as dotenvConfig } from "dotenv";
+import path from "path";
+
+// Load .env file
+dotenvConfig({ path: path.join(__dirname, ".env") });
+
+interface Config {
+    PORT: number;
+    DATABASE_URL: string;
+    JWT_SECRET: string;
+    JWT_EXPIRY: string;
+    ADMIN_EMAIL: string;
+    ADMIN_PASSWORD: string | undefined;
+    SUPABASE_URL: string;
+    SUPABASE_SERVICE_ROLE_KEY: string;
+    NODE_ENV: string;
+}
+
+const requiredEnvVars = [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "ADMIN_EMAIL",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY"
+];
+
+for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+        throw new Error(`Environment variable ${envVar} is missing`);
+    }
+}
+
+export const config: Config = {
+    PORT: parseInt(process.env.PORT || "3000", 10),
+    DATABASE_URL: process.env.DATABASE_URL!,
+    JWT_SECRET: process.env.JWT_SECRET!,
+    JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
+    ADMIN_EMAIL: process.env.ADMIN_EMAIL!,
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
+    SUPABASE_URL: process.env.SUPABASE_URL!,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    NODE_ENV: process.env.NODE_ENV || "development"
+};

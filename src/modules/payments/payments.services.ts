@@ -3,9 +3,9 @@ import { PaymentMethod, PaymentStatus, PaymentType, Prisma } from "@prisma/clien
 import { notifyAdmins } from "../notifications/notifications.services";
 import { fileUploadService } from "../../services/fileUpload.service";
 import SocketService from "../../services/socket.service";
+import * as projectService from "../project/project.services";
 
 export const createPayment = async (data: {
-    // ... args
     amount: number,
     projectId: string,
     paymentStatus: string,
@@ -19,8 +19,6 @@ export const createPayment = async (data: {
     originalname: string;
     mimetype: string;
 }) => {
-    // ... (existing logic for parsing and validation)
-
     // Parse paymentBreakup if it's a string
     let parsedBreakup = data.paymentBreakup;
     if (typeof data.paymentBreakup === 'string') {
@@ -62,6 +60,13 @@ export const createPayment = async (data: {
         }
     }
 
+    // Validate Project via Service (Decoupled)
+    // data.projectId is required (string)
+    const project = await projectService.getProjectById(data.projectId);
+
+    // Check if customer exists for the project
+    // project.customer is included in getProjectById
+
     const newPayment = await prisma.payment.create({
         data: {
             amount: data.amount,
@@ -81,12 +86,6 @@ export const createPayment = async (data: {
         }
     });
 
-    // Get Project details for notification
-    const project = await prisma.project.findUnique({
-        where: { projectId: data.projectId },
-        select: { projectName: true, customerId: true }
-    });
-
     // Notify Admins
     try {
         const projectName = project?.projectName || "Unknown Project";
@@ -102,8 +101,8 @@ export const createPayment = async (data: {
     }
 
     // Notify Customer
-    if (project && project.customerId) {
-        SocketService.getInstance().emitToUser(project.customerId, "notification", {
+    if (project && project.customer && project.customer.userId) {
+        SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
             type: "PAYMENT_RECEIVED",
             message: `Payment of ${data.amount} received for your project ${project.projectName}`,
             paymentId: newPayment.paymentId
@@ -113,9 +112,6 @@ export const createPayment = async (data: {
     return newPayment;
 }
 
-// ... (get functions)
-
-// Update payment
 export const updatePayment = async (paymentId: string, updateData: {
     amount?: number,
     projectId?: string,
@@ -131,17 +127,22 @@ export const updatePayment = async (paymentId: string, updateData: {
     originalname: string;
     mimetype: string;
 }) => {
+    // 1. Fetch Payment without relations first (owned entity)
     const payment = await prisma.payment.findUnique({
         where: { paymentId },
-        include: { project: { select: { customerId: true, projectName: true } } }
     });
 
     if (!payment) {
         throw new Error("Payment not found");
     }
 
-    // ... (rest of validation logic)
-    // Validate MultiMode if being updated
+    // 2. Fetch Project Relation via Service (Handle nullable projectId)
+    let project = null;
+    if (payment.projectId) {
+        project = await projectService.getProjectById(payment.projectId);
+    }
+
+    // Validate logic using `payment`
     const isMultiMode = updateData.paymentType === PaymentType.MultiMode || (updateData.paymentType === undefined && payment.paymentType === PaymentType.MultiMode);
 
     // Parse breakup if provided as string
@@ -192,7 +193,11 @@ export const updatePayment = async (paymentId: string, updateData: {
     };
 
     if (updateData.amount !== undefined) dataToUpdate.amount = updateData.amount;
-    if (updateData.projectId !== undefined) dataToUpdate.project = { connect: { projectId: updateData.projectId } };
+    if (updateData.projectId !== undefined) {
+        // If updating project, validate new project
+        await projectService.getProjectById(updateData.projectId);
+        dataToUpdate.project = { connect: { projectId: updateData.projectId } };
+    }
     if (updateData.paymentStatus !== undefined) dataToUpdate.paymentStatus = updateData.paymentStatus as PaymentStatus;
     if (updateData.paymentType !== undefined) dataToUpdate.paymentType = updateData.paymentType as PaymentType;
     if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = updateData.paymentMethod as PaymentMethod;
@@ -221,13 +226,20 @@ export const updatePayment = async (paymentId: string, updateData: {
     const updatedPayment = await prisma.payment.update({
         where: { paymentId },
         data: dataToUpdate,
-        include: { project: { select: { customerId: true, projectName: true } } }
+        // Removed include
     });
 
-    if (updatedPayment.project && updatedPayment.project.customerId) {
-        SocketService.getInstance().emitToUser(updatedPayment.project.customerId, "notification", {
+    // Notify (using fetched project from start, or fetching new one if updated?)
+    // If projectId changed, we should probably fetch new project.
+    let notifyProject = project;
+    if (updateData.projectId && updateData.projectId !== payment.projectId) {
+        notifyProject = await projectService.getProjectById(updateData.projectId);
+    }
+
+    if (notifyProject && notifyProject.customer && notifyProject.customer.userId) {
+        SocketService.getInstance().emitToUser(notifyProject.customer.userId, "notification", {
             type: "PAYMENT_UPDATED",
-            message: `Payment updated for project ${updatedPayment.project.projectName}`,
+            message: `Payment updated for project ${notifyProject.projectName}`,
             paymentId: updatedPayment.paymentId
         });
     }
@@ -249,14 +261,13 @@ export const deletePayment = async (paymentId: string) => {
 };
 
 
-
 /**
  * Get budget summary across all projects
  * Calculates: Total Budget, Payment Received, Payment Pending
  */
 export const getBudgetSummary = async () => {
-    // Get all projects with their budgets
-    const projects = await prisma.project.findMany();
+    // Get all projects with their budgets (Decoupled)
+    const projects = await projectService.getAllProjectsBudgets();
 
     // Get all completed payments grouped by project
     const paymentsByProject = await prisma.payment.groupBy({
@@ -304,8 +315,6 @@ export const getBudgetSummary = async () => {
     };
 };
 
-
-
 /**
  * Get budget summary for a specific project
  * Calculates: Total Budget, Paid Amount, Pending Amount, Progress Percentage
@@ -316,12 +325,8 @@ export const getBudgetSummaryByProject = async (projectId: string) => {
         throw new Error("Project ID is required");
     }
 
-    // Get the project
-    const project = await prisma.project.findUnique({ where: { projectId } });
-
-    if (!project) {
-        throw new Error("Project not found");
-    }
+    // Get the project (Decoupled)
+    const project = await projectService.getProjectById(projectId);
 
     const totalBudget = parseFloat(project.totalBudget.toString()) || 0;
 

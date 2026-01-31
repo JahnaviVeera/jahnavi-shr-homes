@@ -1,21 +1,5 @@
-import dotenv from "dotenv";
-import path from "path";
-import fs from "fs";
-
-// Robust environment variable loading
-const envPaths = [
-    path.resolve(process.cwd(), ".env"),
-    path.resolve(process.cwd(), "src/config/.env"),
-    path.resolve(__dirname, "config/.env"), // Relative to compiled JS
-];
-
-for (const envPath of envPaths) {
-    if (fs.existsSync(envPath)) {
-        dotenv.config({ path: envPath });
-        console.log(`Loaded environment from: ${envPath}`);
-        break;
-    }
-}
+import { config } from "./config/env";
+// Removed redundant dotenv loading logic as it's handled in config/env.ts
 
 import http from "http";
 import app from "./app";

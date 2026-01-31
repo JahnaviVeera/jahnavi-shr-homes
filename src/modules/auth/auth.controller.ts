@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+﻿import type { Request, Response, NextFunction } from "express";
 const authServices = require("./auth.services");
 
 /**
@@ -56,7 +56,7 @@ const authServices = require("./auth.services");
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.adminLogin = async (req: Request, res: Response) => {
+exports.adminLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
 
@@ -70,11 +70,7 @@ exports.adminLogin = async (req: Request, res: Response) => {
             role: result.role
         });
     } catch (error) {
-        const statusCode = error instanceof Error && error.message.includes("Invalid") ? 401 : 400;
-        return res.status(statusCode).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -136,7 +132,7 @@ exports.adminLogin = async (req: Request, res: Response) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.userLogin = async (req: Request, res: Response) => {
+exports.userLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
 
@@ -151,11 +147,7 @@ exports.userLogin = async (req: Request, res: Response) => {
             userId: result.userId
         });
     } catch (error) {
-        const statusCode = error instanceof Error && error.message.includes("Invalid") ? 401 : 400;
-        return res.status(statusCode).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -217,7 +209,7 @@ exports.userLogin = async (req: Request, res: Response) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.supervisorLogin = async (req: Request, res: Response) => {
+exports.supervisorLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
 
@@ -232,13 +224,6 @@ exports.supervisorLogin = async (req: Request, res: Response) => {
             userId: result.userId
         });
     } catch (error) {
-        const statusCode = error instanceof Error && (error.message.includes("Invalid") || error.message.includes("Access denied")) ? 401 : 400;
-        return res.status(statusCode).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
-
-
-

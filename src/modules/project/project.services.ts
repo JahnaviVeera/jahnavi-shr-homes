@@ -232,3 +232,74 @@ export const deleteProject = async (projectId: string) => {
     return { success: true, message: "Project deleted successfully" };
 };
 
+/**
+ * Get project by ID
+ * @param projectId - The ID of the project
+ * @returns Project record with details
+ */
+export const getProjectById = async (projectId: string) => {
+    if (!projectId) throw new Error("Project ID is required");
+    const project = await prisma.project.findUnique({
+        where: { projectId },
+        include: { customer: true, supervisor: true }
+    });
+    if (!project) throw new Error(`Project with ID ${projectId} not found`);
+    return project;
+};
+
+/**
+ * Get projects by Customer ID
+ * @param customerId - The user ID of the customer
+ * @returns List of projects
+ */
+export const getProjectsByCustomerId = async (customerId: string) => {
+    return prisma.project.findMany({
+        where: { customerId },
+        select: { projectId: true, projectName: true, location: true }
+    });
+};
+
+/**
+ * Get projects by Supervisor ID
+ * @param supervisorId - The ID of the supervisor
+ * @returns List of projects
+ */
+export const getProjectsBySupervisorId = async (supervisorId: string) => {
+    return prisma.project.findMany({
+        where: { supervisorId },
+        select: { projectId: true, projectName: true, location: true }
+    });
+};
+
+/**
+ * Get all projects with budget
+ * @returns List of projects with IDs and budgets
+ */
+export const getAllProjectsBudgets = async () => {
+    return prisma.project.findMany({
+        select: {
+            projectId: true,
+            totalBudget: true
+        }
+    });
+};
+
+
+/**
+ * Assign multiple projects to a customer
+ * @param customerId - The User ID of the customer
+ * @param projectIds - Array of Project IDs
+ */
+export const assignProjectsToCustomer = async (customerId: string, projectIds: string[]) => {
+    if (!projectIds || projectIds.length === 0) return;
+
+    // Ensure all projects exist or handle errors?
+    // prisma.project.updateMany allows batch update.
+    const updateResult = await prisma.project.updateMany({
+        where: { projectId: { in: projectIds } },
+        data: { customerId: customerId }
+    });
+
+    // Check if distinct count matches? No, updateMany returns count.
+    return updateResult;
+};
