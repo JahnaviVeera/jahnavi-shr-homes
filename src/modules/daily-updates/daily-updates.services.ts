@@ -2,6 +2,7 @@
 import { fileUploadService } from "../../services/fileUpload.service";
 import { ConstructionStage, DailyUpdateStatus, Prisma } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
+import SocketService from "../../services/socket.service";
 
 /**
  * Create a new daily update
@@ -125,12 +126,21 @@ export const createDailyUpdate = async (
 
     // Notify Admins
     if (projectName) {
+        SocketService.getInstance().emitToRole("admin", "daily_update_created", {
+            message: `New daily update submitted for ${projectName}`,
+            dailyUpdateId: newDailyUpdate.dailyUpdateId
+        });
         await notifyAdmins(`New daily update submitted for ${projectName}`, "daily_update");
     } else {
+        SocketService.getInstance().emitToRole("admin", "daily_update_created", {
+            message: `New daily update submitted`,
+            dailyUpdateId: newDailyUpdate.dailyUpdateId
+        });
         await notifyAdmins(`New daily update submitted`, "daily_update");
     }
 
     return newDailyUpdate;
+
 };
 
 /**
@@ -434,10 +444,9 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
     }
 
     // Find all projects belonging to the user
-    // Assuming User <-> Project relationship (user has many projects)
     const userProjects = await prisma.project.findMany({
         where: {
-            members: { some: { userId: userId } }
+            customerId: userId
         },
         select: { projectId: true }
     });
@@ -479,14 +488,16 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
  */
 export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
-    // Check if the daily update belongs to a project owned by the user OR user is a member
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
         include: {
             project: {
                 include: {
-                    members: {
-                        select: { userId: true }
+                    customer: {
+                        select: { userId: true, email: true }
+                    },
+                    supervisor: {
+                        select: { userId: true, email: true }
                     }
                 }
             }
@@ -501,10 +512,10 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
         throw new Error("Daily update is not linked to any project");
     }
 
-    // Check if user is in the members list
-    const isMember = dailyUpdate.project.members.some((member: { userId: string }) => member.userId === userId);
+    // Check if user is the customer of the project
+    const isCustomer = dailyUpdate.project.customer?.userId === userId;
 
-    if (!isMember) {
+    if (!isCustomer) {
         throw new Error("Unauthorized: You can only approve updates for your own projects");
     }
 
@@ -517,8 +528,23 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
     });
 
     // Notify Admins
+    SocketService.getInstance().emitToRole("admin", "daily_update_status", {
+        status: "APPROVED",
+        projectName: dailyUpdate.project.projectName,
+        dailyUpdateId: dailyUpdate.dailyUpdateId
+    });
+
+    // Notify Supervisor
+    if (dailyUpdate.project.supervisor) {
+        SocketService.getInstance().emitToUser(dailyUpdate.project.supervisor.userId, "notification", {
+            type: "DAILY_UPDATE_APPROVED",
+            message: `Daily update for ${dailyUpdate.project.projectName} has been APPROVED by customer`,
+            dailyUpdateId: dailyUpdate.dailyUpdateId
+        });
+    }
+
     try {
-        const projectName = dailyUpdate.project?.projectName || "Unknown Project";
+        const projectName = dailyUpdate.project.projectName || "Unknown Project";
         await notifyAdmins(`Daily update for ${projectName} has been APPROVED by the customer`, "daily_update_approval");
     } catch (error) {
         console.error("Failed to send notification:", error);
@@ -536,14 +562,16 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
  */
 export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
     // Check if the daily update belongs to a project owned by the user
-    // Check if the daily update belongs to a project owned by the user OR user is a member
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
         include: {
             project: {
                 include: {
-                    members: {
-                        select: { userId: true }
+                    customer: {
+                        select: { userId: true, email: true }
+                    },
+                    supervisor: {
+                        select: { userId: true, email: true }
                     }
                 }
             }
@@ -558,10 +586,10 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
         throw new Error("Daily update is not linked to any project");
     }
 
-    // Check if user is in the members list
-    const isMember = dailyUpdate.project.members.some((member: { userId: string }) => member.userId === userId);
+    // Check if user is the customer of the project
+    const isCustomer = dailyUpdate.project.customer?.userId === userId;
 
-    if (!isMember) {
+    if (!isCustomer) {
         throw new Error("Unauthorized: You can only reject updates for your own projects");
     }
 
@@ -574,8 +602,23 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
     });
 
     // Notify Admins
+    SocketService.getInstance().emitToRole("admin", "daily_update_status", {
+        status: "REJECTED",
+        projectName: dailyUpdate.project.projectName,
+        dailyUpdateId: dailyUpdate.dailyUpdateId
+    });
+
+    // Notify Supervisor
+    if (dailyUpdate.project.supervisor) {
+        SocketService.getInstance().emitToUser(dailyUpdate.project.supervisor.userId, "notification", {
+            type: "DAILY_UPDATE_REJECTED",
+            message: `Daily update for ${dailyUpdate.project.projectName} has been REJECTED by customer`,
+            dailyUpdateId: dailyUpdate.dailyUpdateId
+        });
+    }
+
     try {
-        const projectName = dailyUpdate.project?.projectName || "Unknown Project";
+        const projectName = dailyUpdate.project.projectName || "Unknown Project";
         await notifyAdmins(`Daily update for ${projectName} has been REJECTED by the customer`, "daily_update_rejection");
     } catch (error) {
         console.error("Failed to send notification:", error);

@@ -89,10 +89,10 @@ export const getSupervisorById = async (supervisorId: string) => {
         throw new Error("Supervisor not found");
     }
 
-    // Get assigned project count (historically count, but now singular projectId exists)
+    // Get assigned project count
     const projects = await prisma.project.findMany({
-        where: { supervisors: { some: { supervisorId } } },
-        include: { members: { where: { role: 'user' } } }
+        where: { supervisorId },
+        include: { customer: true }
     });
 
     // Remove password from response and add projects count
@@ -120,7 +120,7 @@ export const getSupervisorProfile = async (supervisorId: string) => {
     // Active: Not Completed (Planning, Inprogress, OnHold)
     const activeProjectsCount = await prisma.project.count({
         where: {
-            supervisors: { some: { supervisorId } },
+            supervisorId,
             initialStatus: {
                 not: 'Completed' as any
             }
@@ -130,7 +130,7 @@ export const getSupervisorProfile = async (supervisorId: string) => {
     // Completed: Status is Completed
     const completedProjectsCount = await prisma.project.count({
         where: {
-            supervisors: { some: { supervisorId } },
+            supervisorId,
             initialStatus: 'Completed' as any
         }
     });
@@ -169,7 +169,7 @@ export const getAllSupervisors = async (search?: string) => {
     const supervisorsWithCounts = await Promise.all(
         supervisors.map(async (supervisor: any) => {
             const projectsCount = await prisma.project.count({
-                where: { supervisors: { some: { supervisorId: supervisor.supervisorId } } }
+                where: { supervisorId: supervisor.supervisorId }
             });
 
             const { password: _, ...supervisorWithoutPassword } = supervisor;
@@ -291,7 +291,7 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
 
     // Get projects count
     const projectsCount = await prisma.project.count({
-        where: { supervisors: { some: { supervisorId } } }
+        where: { supervisorId }
     });
 
     // Remove password from response
@@ -338,7 +338,7 @@ export const removeProjectFromSupervisor = async (supervisorId: string, projectI
 
     // Get projects count
     const projectsCount = await prisma.project.count({
-        where: { supervisors: { some: { supervisorId } } }
+        where: { supervisorId }
     });
 
     // Remove password from response
@@ -365,8 +365,8 @@ export const getAssignedProjectsCount = async (supervisorId: string) => {
 
     // Get assigned projects
     const projects = await prisma.project.findMany({
-        where: { supervisors: { some: { supervisorId } } },
-        include: { members: { where: { role: 'user' } } }
+        where: { supervisorId },
+        include: { customer: true }
     });
 
     return {
@@ -394,8 +394,8 @@ export const getAssignedProjects = async (supervisorId: string) => {
 
     // Get all assigned projects with relations
     const projects = await prisma.project.findMany({
-        where: { supervisors: { some: { supervisorId } } },
-        include: { supervisors: true, members: { where: { role: 'user' } } },
+        where: { supervisorId },
+        include: { supervisor: true, customer: true },
         orderBy: { createdAt: "desc" }
     });
 

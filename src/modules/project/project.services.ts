@@ -14,6 +14,8 @@ const parseDate = (dateInput: string | Date): Date => {
     return date;
 };
 
+import SocketService from "../../services/socket.service";
+
 // Create a new project
 export const createProject = async (data:
     {
@@ -27,6 +29,8 @@ export const createProject = async (data:
         materialName?: string,
         quantity?: number,
         notes?: string,
+        customerId: string,
+        supervisorId: string,
         createdAt?: Date,
         updatedAt?: Date
     }) => {
@@ -43,6 +47,21 @@ export const createProject = async (data:
         throw new Error(`Invalid initialStatus: "${data.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
     }
 
+    // Validate Customer
+    const customer = await prisma.user.findUnique({
+        where: { userId: data.customerId }
+    });
+    if (!customer) {
+        throw new Error(`Customer with ID ${data.customerId} not found`);
+    }
+
+    // Validate Supervisor
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { supervisorId: data.supervisorId }
+    });
+    if (!supervisor) {
+        throw new Error(`Supervisor with ID ${data.supervisorId} not found`);
+    }
 
     const newProject = await prisma.project.create({
         data: {
@@ -56,55 +75,34 @@ export const createProject = async (data:
             materialName: data.materialName || "",
             quantity: data.quantity || 0,
             notes: data.notes || "",
+            customerId: data.customerId,
+            supervisorId: data.supervisorId,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
     });
 
+    // Notify Admin
+    SocketService.getInstance().emitToRole("admin", "project_created", newProject);
+
+    // Notify Supervisor
+    SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+        type: "PROJECT_ASSIGNED",
+        message: `You have been assigned to new project: ${newProject.projectName}`,
+        projectId: newProject.projectId
+    });
+
+    // Notify Customer
+    SocketService.getInstance().emitToUser(customer.userId, "notification", {
+        type: "PROJECT_CREATED",
+        message: `Your project ${newProject.projectName} has been created`,
+        projectId: newProject.projectId
+    });
+
     return newProject;
 }
 
-// Get project by ID
-export const getProjectByProjectId = async (projectId: string) => {
-
-    if (!projectId) {
-        throw new Error("Project not exists");
-    }
-    const project = await prisma.project.findUnique({
-        where: { projectId },
-        include: {
-            members: true      // Include Members details instead of removed Owner/Supervisor
-        }
-    });
-    if (!project) {
-        throw new Error("Project not found");
-    }
-    return project;
-};
-
-// Get all projects
-export const getAllTheProjects = async (search?: string) => {
-    const whereClause: any = {};
-
-    if (search) {
-        whereClause.OR = [
-            { projectName: { contains: search, mode: 'insensitive' } },
-            { location: { contains: search, mode: 'insensitive' } },
-            { materialName: { contains: search, mode: 'insensitive' } },
-            { notes: { contains: search, mode: 'insensitive' } }
-        ];
-    }
-
-    const projects = await prisma.project.findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' }
-    });
-
-    if (!projects) {
-        return [];
-    }
-    return projects;
-};
+// ... existing code ...
 
 // Update project
 export const updateProject = async (projectId: string, updateData: {
@@ -118,6 +116,8 @@ export const updateProject = async (projectId: string, updateData: {
     materialName?: string,
     quantity?: number,
     notes?: string,
+    customerId?: string,
+    supervisorId?: string,
     updatedAt?: Date
 } | undefined | null) => {
     // Check if updateData is provided
@@ -164,13 +164,58 @@ export const updateProject = async (projectId: string, updateData: {
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
     if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
 
+    if (updateData.customerId !== undefined) {
+        // Validate Customer
+        const customer = await prisma.user.findUnique({
+            where: { userId: updateData.customerId }
+        });
+        if (!customer) {
+            throw new Error(`Customer with ID ${updateData.customerId} not found`);
+        }
+        dataToUpdate.customer = { connect: { userId: updateData.customerId } };
+    }
+
+    if (updateData.supervisorId !== undefined) {
+        // Validate Supervisor
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: updateData.supervisorId }
+        });
+        if (!supervisor) {
+            throw new Error(`Supervisor with ID ${updateData.supervisorId} not found`);
+        }
+        dataToUpdate.supervisor = { connect: { supervisorId: updateData.supervisorId } };
+    }
+
     const updatedProject = await prisma.project.update({
         where: { projectId },
         data: dataToUpdate,
+        include: { supervisor: true, customer: true } // Include relations for notification
     });
+
+    // Notify Admin
+    SocketService.getInstance().emitToRole("admin", "project_updated", updatedProject);
+
+    // Notify Supervisor
+    if (updatedProject.supervisor) {
+        SocketService.getInstance().emitToUser(updatedProject.supervisor.userId, "notification", {
+            type: "PROJECT_UPDATED",
+            message: `Project ${updatedProject.projectName} has been updated`,
+            projectId: updatedProject.projectId
+        });
+    }
+
+    // Notify Customer
+    if (updatedProject.customer) {
+        SocketService.getInstance().emitToUser(updatedProject.customer.userId, "notification", {
+            type: "PROJECT_UPDATED",
+            message: `Project ${updatedProject.projectName} has been updated`,
+            projectId: updatedProject.projectId
+        });
+    }
 
     return updatedProject;
 };
+
 
 // Delete project
 export const deleteProject = async (projectId: string) => {
@@ -186,3 +231,4 @@ export const deleteProject = async (projectId: string) => {
 
     return { success: true, message: "Project deleted successfully" };
 };
+

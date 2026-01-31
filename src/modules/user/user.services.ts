@@ -37,16 +37,17 @@ export const createUser = async (data: {
 
     // Check if any of the projects are already assigned to another user
     if (data.projectIds && data.projectIds.length > 0) {
+        // Since customerId is required on Project, any existing project is assigned.
+        // We check if any of these projects simply exist.
         const assignedProjects = await prisma.project.findMany({
             where: {
-                projectId: { in: data.projectIds },
-                members: { some: {} }
+                projectId: { in: data.projectIds }
             },
             select: { projectName: true }
         });
 
         if (assignedProjects.length > 0) {
-            throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
+            throw new Error(`Project(s) already exist and are assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
         }
     }
 
@@ -200,25 +201,6 @@ export const updateUser = async (userId: string, updatedUserData: {
 
     // Project Associations
     if (updatedUserData.projectIds !== undefined) {
-        // Check if any of the projects are already assigned to another user (excluding current user)
-        if (updatedUserData.projectIds.length > 0) {
-            const assignedProjects = await prisma.project.findMany({
-                where: {
-                    projectId: { in: updatedUserData.projectIds },
-                    members: {
-                        some: {
-                            userId: { not: userId }
-                        }
-                    }
-                },
-                select: { projectName: true }
-            });
-
-            if (assignedProjects.length > 0) {
-                throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
-            }
-        }
-
         dataToUpdate.projects = {
             set: updatedUserData.projectIds.map(projectId => ({ projectId }))
         };
@@ -332,7 +314,7 @@ export const getNewLeadsList = async () => {
             initialStatus: 'Inprogress'
         },
         include: {
-            members: {
+            customer: {
                 select: {
                     userId: true,
                     userName: true,
@@ -348,17 +330,17 @@ export const getNewLeadsList = async () => {
     // Flatten the results to match the required table format
     const flatLeads: any[] = [];
     projects.forEach(project => {
-        project.members.forEach(member => {
+        if (project.customer) {
             flatLeads.push({
-                userId: member.userId,
+                userId: project.customer.userId,
                 projectId: project.projectId,
-                customerName: member.userName,
+                customerName: project.customer.userName,
                 projectName: project.projectName,
-                mobileNumber: member.contact,
+                mobileNumber: project.customer.contact,
                 projectValue: project.totalBudget,
                 date: project.startDate
             });
-        });
+        }
     });
 
     return flatLeads;
@@ -371,7 +353,7 @@ export const getClosedCustomersList = async () => {
             initialStatus: { in: ['complete', 'Completed'] }
         },
         include: {
-            members: {
+            customer: {
                 select: {
                     userId: true,
                     userName: true,
@@ -387,18 +369,19 @@ export const getClosedCustomersList = async () => {
     // Flatten the results to match the required table format
     const flatCustomers: any[] = [];
     projects.forEach(project => {
-        project.members.forEach(member => {
+        if (project.customer) {
             flatCustomers.push({
-                userId: member.userId,
+                userId: project.customer.userId,
                 projectId: project.projectId,
-                customerName: member.userName,
+                customerName: project.customer.userName,
                 projectName: project.projectName,
-                mobileNumber: member.contact,
+                mobileNumber: project.customer.contact,
                 projectValue: project.totalBudget,
                 date: project.startDate
             });
-        });
+        }
     });
 
     return flatCustomers;
 };
+
