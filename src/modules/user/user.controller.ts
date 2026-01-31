@@ -109,12 +109,6 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
  *   get:
  *     summary: Get all users
  *     tags: [Users]
- *     parameters:
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: Search by userName, email, contact, or companyName
  *     responses:
  *       200:
  *         description: Users fetched successfully
@@ -139,11 +133,10 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
 //GETALL
 exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { search } = req.query;
-        const users = await UserServices.getAllUsers(search as string);
+        const users = await UserServices.getAllUsers();
         return res.status(200).json({
             success: true,
-            message: "Users feched successfully",
+            message: "Users fetched successfully",
             data: users
         })
 
@@ -210,12 +203,7 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 maxLength: 255
  *                 example: "ABC Construction Ltd"
  *                 description: Company name (optional)
- *               projectIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                   format: uuid
- *                 description: List of project IDs to associate with the user (optional)
+
  *
  *               timezone:
  *                 type: string
@@ -1147,7 +1135,7 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
     }
 };
 
-const AnalyticsServices = require("../analytics/analytics.services");
+// Analytics methods moved to UserServices
 
 // ... existing code ...
 
@@ -1165,7 +1153,7 @@ const AnalyticsServices = require("../analytics/analytics.services");
  */
 exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const stats = await AnalyticsServices.getCustomerLeadsStats();
+        const stats = await UserServices.getCustomerLeadsStats();
         return res.status(200).json({
             success: true,
             message: "Customer leads stats fetched successfully",
@@ -1180,7 +1168,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFu
  * @swagger
  * /api/user/leads/new:
  *   get:
- *     summary: Get list of new leads (Users with Inprogress projects)
+ *     summary: Get list of new leads (Users with Inprogress or Planning projects)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -1190,7 +1178,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFu
  */
 exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const leads = await AnalyticsServices.getNewLeadsList();
+        const leads = await UserServices.getNewLeadsList();
         return res.status(200).json({
             success: true,
             message: "New leads fetched successfully",
@@ -1215,7 +1203,7 @@ exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) =>
  */
 exports.getClosedCustomers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const customers = await AnalyticsServices.getClosedCustomersList();
+        const customers = await UserServices.getClosedCustomersList();
         return res.status(200).json({
             success: true,
             message: "Closed customers fetched successfully",

@@ -315,14 +315,7 @@ const options = {
               description: "Company name (optional)",
               example: "ABC Construction Ltd",
             },
-            projectIds: {
-              type: "array",
-              items: {
-                type: "string",
-                format: "uuid"
-              },
-              description: "List of project IDs to associate with the user"
-            },
+
             timezone: {
               type: "string",
               maxLength: 100,
@@ -345,7 +338,7 @@ const options = {
         },
         CreateProjectRequest: {
           type: "object",
-          required: ["projectName", "projectType", "location", "initialStatus", "startDate", "expectedCompletion", "totalBudget", "userId"],
+          required: ["projectName", "projectType", "location", "initialStatus", "startDate", "expectedCompletion", "totalBudget", "customerId", "supervisorId"],
           properties: {
             projectName: {
               type: "string",
@@ -397,6 +390,18 @@ const options = {
               type: "string",
               example: "Project notes",
               description: "Additional project notes (optional)",
+            },
+            customerId: {
+              type: "string",
+              format: "uuid",
+              example: "123e4567-e89b-12d3-a456-426614174000",
+              description: "The ID of the customer user",
+            },
+            supervisorId: {
+              type: "string",
+              format: "uuid",
+              example: "123e4567-e89b-12d3-a456-426614174001",
+              description: "The ID of the supervisor",
             },
           },
         },
@@ -450,6 +455,16 @@ const options = {
             notes: {
               type: "string",
               example: "Updated project details",
+            },
+            customerId: {
+              type: "string",
+              format: "uuid",
+              example: "123e4567-e89b-12d3-a456-426614174000",
+            },
+            supervisorId: {
+              type: "string",
+              format: "uuid",
+              example: "123e4567-e89b-12d3-a456-426614174001",
             },
           },
         },

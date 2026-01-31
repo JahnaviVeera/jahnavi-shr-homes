@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const MessagesController = require("./messages.controller");
-import { customerSupervisorAuthMiddleware } from "../../middleware/customerSupervisorAuth.middleware";
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -12,7 +12,7 @@ import { customerSupervisorAuthMiddleware } from "../../middleware/customerSuper
 
 // Apply auth middleware to all routes
 // Only customers and supervisors can access messages
-router.use(customerSupervisorAuthMiddleware);
+router.use(authenticate, authorizeRoles("user", "supervisor"));
 
 // POST - Send a message
 router.post("/", MessagesController.sendMessage);

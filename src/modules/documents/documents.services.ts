@@ -37,8 +37,8 @@ export const createDocument = async (
     try {
         const uploadResult = await fileUploadService.uploadFile({
             file: file as any,
-            bucket: 'documents', // Using 'documents' bucket
-            folder: 'project_docs'
+            bucket: 'uploads', // Using 'documents' bucket
+            folder: 'documents'
         });
         fileUrl = uploadResult.publicUrl;
         fileId = uploadResult.id;
@@ -253,8 +253,8 @@ export const updateDocument = async (
         try {
             const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
-                bucket: 'documents',
-                folder: 'project_docs'
+                bucket: 'uploads',
+                folder: 'documents'
             });
             dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
             dataToUpdate.fileName = file.originalname;

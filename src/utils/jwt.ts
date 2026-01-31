@@ -5,16 +5,18 @@ import jwt, { SignOptions } from "jsonwebtoken";
 dotenv.config({ path: "./src/config/.env" });
 
 interface TokenPayload {
+    userId: string;
     email: string;
     role: string;
 }
 
 /**
  * Generate JWT token for admin
+ * @param userId - Admin user ID
  * @param email - Admin email
  * @returns JWT token string
  */
-export const generateAdminToken = (email: string): string => {
+export const generateAdminToken = (userId: string, email: string): string => {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
@@ -22,6 +24,7 @@ export const generateAdminToken = (email: string): string => {
     }
 
     const payload: TokenPayload = {
+        userId,
         email,
         role: "admin"
     };
@@ -34,11 +37,12 @@ export const generateAdminToken = (email: string): string => {
 
 /**
  * Generate JWT token for user or supervisor
+ * @param userId - User or Supervisor ID
  * @param email - User email
  * @param role - User role ("user" or "supervisor")
  * @returns JWT token string
  */
-export const generateUserToken = (email: string, role: string): string => {
+export const generateUserToken = (userId: string, email: string, role: string): string => {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
@@ -50,6 +54,7 @@ export const generateUserToken = (email: string, role: string): string => {
     }
 
     const payload: TokenPayload = {
+        userId,
         email,
         role
     };

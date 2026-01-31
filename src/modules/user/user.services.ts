@@ -16,7 +16,6 @@ export const createUser = async (data: {
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
-    projectIds?: string[];
     createdAt: Date;
     updatedAt: Date;
 }) => {
@@ -34,20 +33,7 @@ export const createUser = async (data: {
         hashedPassword = await bcrypt.hash(data.password.trim(), 10);
     }
 
-    // Check if any of the projects are already assigned to another user
-    if (data.projectIds && data.projectIds.length > 0) {
-        // Use ProjectService to validate, although checking "reassignment" logic might be complex.
-        // For now, we mainly want to ensure these projects EXIST.
-        // projectService.getProjectById throws if not found.
 
-        // We can loop, or ideally use a new method like getProjectsByIds
-        // For now, let's keep it simple and just rely on the updateMany below throwing/failing if foreign keys are weird?
-        // No, updateMany won't check existence if filter doesn't match.
-        // Let's manually iterate to validate (Decoupled check)
-        for (const pid of data.projectIds) {
-            await projectService.getProjectById(pid);
-        }
-    }
 
     const userData: Prisma.UserCreateInput = {
         userName: data.userName,
@@ -69,22 +55,6 @@ export const createUser = async (data: {
     const newUser = await prisma.user.create({
         data: userData
     });
-
-    // Manually connect projects if provided
-    if (data.projectIds && data.projectIds.length > 0) {
-        // We are updating Project table. In a pure microservice world, we'd call projectService.assignCustomer(pid, uid).
-        // Since we are decoupling DB access but not strictly separating services into processes yet, 
-        // calling projectService.assignCustomerToProjects would be best.
-        // But such method doesn't exist yet.
-        // I will stick to prisma.project access HERE but via the SERVICE if possible?
-        // No, if I remove prisma.project access, I MUST delegate this to ProjectService.
-        // Let's assume for this specific transaction (user creation assigning projects), we SHOULD add a helper in ProjectService.
-
-        // HOWEVER, to keep this refactor scoped, I will leave the direct update here OR add "assignProjectsToCustomer" to project.services.ts
-        // The instructions said "Refactor user.services.ts to use ProjectService instead of direct Prisma calls".
-        // So I should create that helper.
-        await projectService.assignProjectsToCustomer(newUser.userId, data.projectIds);
-    }
 
     return newUser;
 };
@@ -125,20 +95,8 @@ export const getUserById = async (userId: string) => {
     return { ...user, projects };
 }
 
-export const getAllUsers = async (search?: string) => {
-    const whereClause: Prisma.UserWhereInput = {};
-
-    if (search) {
-        whereClause.OR = [
-            { userName: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-            { contact: { contains: search, mode: 'insensitive' } },
-            { companyName: { contains: search, mode: 'insensitive' } }
-        ];
-    }
-
+export const getAllUsers = async () => {
     const users = await prisma.user.findMany({
-        where: whereClause,
         select: {
             userId: true,
             userName: true,
@@ -152,6 +110,7 @@ export const getAllUsers = async (search?: string) => {
     if (!users || users.length === 0) {
         return [];
     }
+
 
     // Fetch projects for all these users
     // If we iterate, N+1 problem.
@@ -187,7 +146,6 @@ export const updateUser = async (userId: string, updatedUserData: {
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
-    projectIds?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -215,12 +173,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
     if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
 
-    // Project Associations: Manual update via Service
-    if (updatedUserData.projectIds !== undefined) {
-        if (updatedUserData.projectIds.length > 0) {
-            await projectService.assignProjectsToCustomer(userId, updatedUserData.projectIds);
-        }
-    }
+
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
@@ -282,4 +235,77 @@ export const changePassword = async (userId: string, currentPassword: string, ne
     });
 
     return { success: true, message: "Password updated successfully" };
+};
+
+// Get Customer Leads Stats
+export const getCustomerLeadsStats = async () => {
+    // New Leads: Unique customers with at least one Inprogress or Planning project
+    const newLeadsCount = await prisma.project.findMany({
+        where: { initialStatus: { in: ['Inprogress', 'Planning'] } },
+        distinct: ['customerId'],
+        select: { customerId: true }
+    }).then(res => res.length);
+
+    // Closed Customers: Unique customers with at least one complete or Completed project
+    const closedCustomersCount = await prisma.project.findMany({
+        where: { initialStatus: { in: ['complete', 'Completed'] } },
+        distinct: ['customerId'],
+        select: { customerId: true }
+    }).then(res => res.length);
+
+    return {
+        newLeads: newLeadsCount,
+        closedCustomers: closedCustomersCount,
+        total: newLeadsCount + closedCustomersCount
+    };
+};
+
+// Get New Leads List (Users with Inprogress or Planning projects)
+export const getNewLeadsList = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            initialStatus: { in: ['Inprogress', 'Planning'] }
+        },
+        include: {
+            customer: true
+        },
+        orderBy: {
+            startDate: 'desc'
+        }
+    });
+
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
+    });
+};
+
+// Get Closed Customers List (Users with complete/Completed projects)
+export const getClosedCustomersList = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            initialStatus: { in: ['complete', 'Completed'] }
+        },
+        include: {
+            customer: true
+        },
+        orderBy: {
+            startDate: 'desc'
+        }
+    });
+
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
+    });
 };

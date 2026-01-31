@@ -2,8 +2,7 @@
 const router = express.Router();
 const QuotationController = require("./quotations.controller");
 const upload = require("../../config/multer.config").default;
-const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -13,59 +12,56 @@ const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware")
  */
 
 // ============================================
-// Public/Admin Routes (no user auth required)
+// Admin Routes
 // ============================================
 
 // Create a new quotation (Admin only)
-router.post("/", adminAuthMiddleware, upload.single("file"), QuotationController.createQuotation);
-
-// Get total amount of a specific quotation (Public/Admin)
-router.get("/:quotationId/total-amount", QuotationController.getQuotationTotalAmount);
-
-// Download quotation file
-router.get("/:quotationId/download", QuotationController.downloadQuotation);
-
-
-// Get all quotations (Public or Admin)
-router.get("/", QuotationController.getAllQuotations);
+router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.createQuotation);
 
 // ============================================
-// User/Supervisor Routes (require user auth)
+// General / User Routes
 // ============================================
+
+// Get total amount of a specific quotation (Authenticated)
+router.get("/:quotationId/total-amount", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationTotalAmount);
+
+// Download quotation file (Authenticated)
+router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.downloadQuotation);
+
+
+// Get all quotations (Admin, Supervisor, maybe User?)
+router.get("/", authenticate, authorizeRoles("admin", "supervisor"), QuotationController.getAllQuotations);
+
 
 // Get pending quotations (must be before /:quotationId route)
-router.get("/pending", userAuthMiddleware, QuotationController.getPendingQuotations);
+router.get("/pending", authenticate, authorizeRoles("admin", "user"), QuotationController.getPendingQuotations);
 
 // Get quotations by status (must be before /:quotationId route)
-router.get("/status/:status", userAuthMiddleware, QuotationController.getQuotationsByStatus);
+router.get("/status/:status", authenticate, authorizeRoles("admin", "user"), QuotationController.getQuotationsByStatus);
 
 // Get quotations by project (must be before /:quotationId route)
-router.get("/project/:projectId", userAuthMiddleware, QuotationController.getQuotationsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationsByProject);
 
 // Get quotations by user (must be before /:quotationId route)
-router.get("/user/:userId", userAuthMiddleware, QuotationController.getQuotationsByUserId);
+router.get("/user/:userId", authenticate, authorizeRoles("admin", "user"), QuotationController.getQuotationsByUserId);
 
-// Approve quotation (must be before /:quotationId route)
-router.post("/:quotationId/approve", userAuthMiddleware, QuotationController.approveQuotation);
+// Approve quotation (User only)
+router.post("/:quotationId/approve", authenticate, authorizeRoles("user"), QuotationController.approveQuotation);
 
-// Reject quotation (must be before /:quotationId route)
-router.post("/:quotationId/reject", userAuthMiddleware, QuotationController.rejectQuotation);
-
-// ============================================
-// General Routes
-// ============================================
+// Reject quotation (User only)
+router.post("/:quotationId/reject", authenticate, authorizeRoles("user"), QuotationController.rejectQuotation);
 
 // Get quotation by ID
-router.get("/:quotationId", QuotationController.getQuotationById);
+router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationById);
 
 // Update quotation (Admin only)
-router.put("/:quotationId", adminAuthMiddleware, upload.single("file"), QuotationController.updateQuotation);
+router.put("/:quotationId", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.updateQuotation);
 
 // Resend quotation (Admin only)
-router.post("/:quotationId/resend", adminAuthMiddleware, QuotationController.resendQuotation);
+router.post("/:quotationId/resend", authenticate, authorizeRoles("admin"), QuotationController.resendQuotation);
 
 // Delete quotation (Admin only)
-router.delete("/:quotationId", adminAuthMiddleware, QuotationController.deleteQuotation);
+router.delete("/:quotationId", authenticate, authorizeRoles("admin"), QuotationController.deleteQuotation);
 
 export default router;
 

@@ -48,6 +48,20 @@ export const createSupervisor = async (data: {
         }
     });
 
+    // Explicitly determine status
+    const supervisorStatus: SupervisorStatus = (data.status as SupervisorStatus) || SupervisorStatus.Active;
+
+    // Explicitly determine projectId and projects connection
+    let assignedProjectId: string | null = null;
+    let projectsConnect: Prisma.SupervisorCreateInput['projects'] = undefined;
+
+    if (data.projectIds && data.projectIds.length > 0) {
+        assignedProjectId = data.projectIds[0]!;
+        projectsConnect = {
+            connect: data.projectIds.map((id) => ({ projectId: id }))
+        };
+    }
+
     // Create supervisor record
     const savedSupervisor = await prisma.supervisor.create({
         data: {
@@ -55,13 +69,12 @@ export const createSupervisor = async (data: {
             email: data.email,
             phoneNumber: data.phoneNumber,
             password: hashedPassword,
-            status: data.status as SupervisorStatus || SupervisorStatus.Active,
+            status: supervisorStatus,
             createdAt: new Date(),
             updatedAt: new Date(),
             userId: savedUser.userId,
-            ...(data.projectIds && data.projectIds.length > 0 ? {
-                projects: { connect: data.projectIds.map((id) => ({ projectId: id })) }
-            } : {})
+            projectId: assignedProjectId,
+            ...(projectsConnect ? { projects: projectsConnect } : {})
         }
     });
 
@@ -282,6 +295,7 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
             projects: {
                 connect: { projectId }
             },
+            projectId: projectId,
             updatedAt: new Date(),
         },
         include: { projects: true }
@@ -322,6 +336,7 @@ export const removeProjectFromSupervisor = async (supervisorId: string, projectI
             projects: {
                 disconnect: { projectId }
             },
+            projectId: null,
             updatedAt: new Date(),
         }
     });
@@ -395,7 +410,7 @@ export const getAssignedProjects = async (supervisorId: string) => {
     // Get all assigned projects with relations
     const projects = await prisma.project.findMany({
         where: { supervisorId },
-        include: { supervisor: true, customer: true },
+        include: { customer: true },
         orderBy: { createdAt: "desc" }
     });
 

@@ -17,6 +17,19 @@ async function startServer() {
         const socketService = SocketService.getInstance();
         socketService.init(httpServer);
 
+        // Handle server errors (like port already in use)
+        httpServer.on("error", (error: any) => {
+            if (error.code === "EADDRINUSE") {
+                console.error(`\n[ERROR] Port ${port} is already in use.`);
+                console.error(`This often happens if the server didn't shut down correctly last time.`);
+                console.error(`The "predev" script should have fixed this, but if you still see this, try running: npm run kill-port\n`);
+                process.exit(1);
+            } else {
+                console.error("Server error:", error);
+                process.exit(1);
+            }
+        });
+
         // Start listening
         httpServer.listen(port, () => {
             console.log(`Server is running on port ${port}`);

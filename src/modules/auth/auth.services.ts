@@ -54,7 +54,7 @@ export const adminLogin = async (email: string, password: string) => {
     }
 
     // 4. Success
-    const token = generateAdminToken(user.email);
+    const token = generateAdminToken(user.userId, user.email);
     logger.info(`[adminLogin] Login successful for: ${user.email}`);
 
     return {
@@ -111,7 +111,7 @@ export const userLogin = async (email: string, password: string) => {
     }
 
     // 4. Success
-    const token = generateUserToken(user.email, user.role);
+    const token = generateUserToken(user.userId, user.email, user.role);
     return {
         success: true,
         message: "Login successful",
@@ -166,7 +166,7 @@ export const supervisorLogin = async (email: string, password: string) => {
     }
 
     // 4. Success
-    const token = generateUserToken(user.email, user.role);
+    const token = generateUserToken(user.userId, user.email, user.role);
     return {
         success: true,
         message: "Supervisor login successful",

@@ -509,12 +509,17 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
     });
 
     // Notify Supervisor
-    if (project.supervisor) {
-        SocketService.getInstance().emitToUser(project.supervisor.userId, "notification", {
-            type: "DAILY_UPDATE_APPROVED",
-            message: `Daily update for ${project.projectName} has been APPROVED by customer`,
-            dailyUpdateId: dailyUpdate.dailyUpdateId
+    if (project.supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: project.supervisorId }
         });
+        if (supervisor) {
+            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+                type: "DAILY_UPDATE_APPROVED",
+                message: `Daily update for ${project.projectName} has been APPROVED by customer`,
+                dailyUpdateId: dailyUpdate.dailyUpdateId
+            });
+        }
     }
 
     try {
@@ -574,12 +579,17 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
     });
 
     // Notify Supervisor
-    if (project.supervisor) {
-        SocketService.getInstance().emitToUser(project.supervisor.userId, "notification", {
-            type: "DAILY_UPDATE_REJECTED",
-            message: `Daily update for ${project.projectName} has been REJECTED by customer`,
-            dailyUpdateId: dailyUpdate.dailyUpdateId
+    if (project.supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: project.supervisorId }
         });
+        if (supervisor) {
+            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+                type: "DAILY_UPDATE_REJECTED",
+                message: `Daily update for ${project.projectName} has been REJECTED by customer`,
+                dailyUpdateId: dailyUpdate.dailyUpdateId
+            });
+        }
     }
 
     try {

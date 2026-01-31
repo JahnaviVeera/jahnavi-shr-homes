@@ -212,7 +212,7 @@ export const updateQuotation = async (quotationId: string, updateData: {
         try {
             const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
-                bucket: 'documents',
+                bucket: 'uploads',
                 folder: 'quotations'
             });
 

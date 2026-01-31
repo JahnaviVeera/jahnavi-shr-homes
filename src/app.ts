@@ -67,10 +67,19 @@ app.use((err: any, req: Request, res: Response, next: any) => {
             message: "Invalid JSON payload provided. Please check for syntax errors like missing quotes or trailing commas."
         });
     }
-    console.error(err);
-    res.status(500).json({
+
+    const statusCode = err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+
+    if (statusCode === 500) {
+        console.error("DEBUG - Internal Error:", err);
+    } else {
+        console.warn(`DEBUG - ${statusCode}: ${message}`);
+    }
+
+    res.status(statusCode).json({
         success: false,
-        message: "Internal Server Error"
+        message: message
     });
 });
 

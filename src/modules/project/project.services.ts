@@ -29,11 +29,13 @@ export const createProject = async (data:
         materialName?: string,
         quantity?: number,
         notes?: string,
-        customerId: string,
-        supervisorId: string,
+        customerId: string | null,
+        supervisorId: string | null,
         createdAt?: Date,
         updatedAt?: Date
     }) => {
+
+
 
     // Validate projectType
     const validProjectTypes = Object.values(ProjectType);
@@ -47,6 +49,11 @@ export const createProject = async (data:
         throw new Error(`Invalid initialStatus: "${data.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
     }
 
+    // Validate IDs
+    if (!data.customerId) {
+        throw new Error("customerId is required");
+    }
+
     // Validate Customer
     const customer = await prisma.user.findUnique({
         where: { userId: data.customerId }
@@ -56,11 +63,14 @@ export const createProject = async (data:
     }
 
     // Validate Supervisor
-    const supervisor = await prisma.supervisor.findUnique({
-        where: { supervisorId: data.supervisorId }
-    });
-    if (!supervisor) {
-        throw new Error(`Supervisor with ID ${data.supervisorId} not found`);
+    let supervisor = null;
+    if (data.supervisorId) {
+        supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: data.supervisorId }
+        });
+        if (!supervisor) {
+            throw new Error(`Supervisor with ID ${data.supervisorId} not found`);
+        }
     }
 
     const newProject = await prisma.project.create({
@@ -75,7 +85,7 @@ export const createProject = async (data:
             materialName: data.materialName || "",
             quantity: data.quantity || 0,
             notes: data.notes || "",
-            customerId: data.customerId,
+            customerId: data.customerId as string,
             supervisorId: data.supervisorId,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -86,11 +96,13 @@ export const createProject = async (data:
     SocketService.getInstance().emitToRole("admin", "project_created", newProject);
 
     // Notify Supervisor
-    SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
-        type: "PROJECT_ASSIGNED",
-        message: `You have been assigned to new project: ${newProject.projectName}`,
-        projectId: newProject.projectId
-    });
+    if (supervisor) {
+        SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+            type: "PROJECT_ASSIGNED",
+            message: `You have been assigned to new project: ${newProject.projectName}`,
+            projectId: newProject.projectId
+        });
+    }
 
     // Notify Customer
     SocketService.getInstance().emitToUser(customer.userId, "notification", {
@@ -102,7 +114,28 @@ export const createProject = async (data:
     return newProject;
 }
 
-// ... existing code ...
+/**
+ * Get all projects with optional search
+ * @param search - Search term for project name, location, material, or notes
+ * @returns List of projects
+ */
+export const getAllTheProjects = async (search?: string) => {
+    const whereClause: Prisma.ProjectWhereInput = {};
+
+    if (search) {
+        whereClause.OR = [
+            { projectName: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } },
+            { materialName: { contains: search, mode: 'insensitive' } },
+            { notes: { contains: search, mode: 'insensitive' } }
+        ];
+    }
+
+    return prisma.project.findMany({
+        where: whereClause,
+        include: { customer: true }
+    });
+};
 
 // Update project
 export const updateProject = async (projectId: string, updateData: {
@@ -117,7 +150,7 @@ export const updateProject = async (projectId: string, updateData: {
     quantity?: number,
     notes?: string,
     customerId?: string,
-    supervisorId?: string,
+    supervisorId?: string | null,
     updatedAt?: Date
 } | undefined | null) => {
     // Check if updateData is provided
@@ -175,7 +208,7 @@ export const updateProject = async (projectId: string, updateData: {
         dataToUpdate.customer = { connect: { userId: updateData.customerId } };
     }
 
-    if (updateData.supervisorId !== undefined) {
+    if (updateData.supervisorId !== undefined && updateData.supervisorId !== null) {
         // Validate Supervisor
         const supervisor = await prisma.supervisor.findUnique({
             where: { supervisorId: updateData.supervisorId }
@@ -183,25 +216,32 @@ export const updateProject = async (projectId: string, updateData: {
         if (!supervisor) {
             throw new Error(`Supervisor with ID ${updateData.supervisorId} not found`);
         }
-        dataToUpdate.supervisor = { connect: { supervisorId: updateData.supervisorId } };
+        (dataToUpdate as any).supervisorId = updateData.supervisorId;
+    } else if (updateData.supervisorId === null) {
+        (dataToUpdate as any).supervisorId = null;
     }
 
     const updatedProject = await prisma.project.update({
         where: { projectId },
         data: dataToUpdate,
-        include: { supervisor: true, customer: true } // Include relations for notification
+        include: { customer: true }
     });
 
     // Notify Admin
     SocketService.getInstance().emitToRole("admin", "project_updated", updatedProject);
 
     // Notify Supervisor
-    if (updatedProject.supervisor) {
-        SocketService.getInstance().emitToUser(updatedProject.supervisor.userId, "notification", {
-            type: "PROJECT_UPDATED",
-            message: `Project ${updatedProject.projectName} has been updated`,
-            projectId: updatedProject.projectId
+    if (updatedProject.supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: updatedProject.supervisorId }
         });
+        if (supervisor) {
+            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+                type: "PROJECT_UPDATED",
+                message: `Project ${updatedProject.projectName} has been updated`,
+                projectId: updatedProject.projectId
+            });
+        }
     }
 
     // Notify Customer
@@ -237,15 +277,18 @@ export const deleteProject = async (projectId: string) => {
  * @param projectId - The ID of the project
  * @returns Project record with details
  */
-export const getProjectById = async (projectId: string) => {
+export const getProjectByProjectId = async (projectId: string) => {
     if (!projectId) throw new Error("Project ID is required");
     const project = await prisma.project.findUnique({
         where: { projectId },
-        include: { customer: true, supervisor: true }
+        include: { customer: true }
     });
     if (!project) throw new Error(`Project with ID ${projectId} not found`);
     return project;
 };
+
+// Alias for backward compatibility
+export const getProjectById = getProjectByProjectId;
 
 /**
  * Get projects by Customer ID

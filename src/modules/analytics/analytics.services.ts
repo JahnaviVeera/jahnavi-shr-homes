@@ -30,31 +30,22 @@ export const getNewLeadsList = async () => {
             initialStatus: 'Inprogress'
         },
         include: {
-            customer: {
-                select: {
-                    userId: true,
-                    userName: true,
-                    contact: true
-                }
-            }
+            customer: true
         },
         orderBy: {
             startDate: 'desc'
         }
     });
 
-    // Flatten the results
-    const flatLeads = projects.map(project => ({
-        userId: project.customer.userId,
-        projectId: project.projectId,
-        customerName: project.customer.userName,
-        projectName: project.projectName,
-        mobileNumber: project.customer.contact,
-        projectValue: project.totalBudget,
-        date: project.startDate
-    }));
-
-    return flatLeads;
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
+    });
 };
 
 // Get Closed Customers List (Users with complete/Completed projects)
@@ -64,29 +55,20 @@ export const getClosedCustomersList = async () => {
             initialStatus: { in: ['complete', 'Completed'] }
         },
         include: {
-            customer: {
-                select: {
-                    userId: true,
-                    userName: true,
-                    contact: true
-                }
-            }
+            customer: true
         },
         orderBy: {
             startDate: 'desc'
         }
     });
 
-    // Flatten the results
-    const flatCustomers = projects.map(project => ({
-        userId: project.customer.userId,
-        projectId: project.projectId,
-        customerName: project.customer.userName,
-        projectName: project.projectName,
-        mobileNumber: project.customer.contact,
-        projectValue: project.totalBudget,
-        date: project.startDate
-    }));
-
-    return flatCustomers;
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
+    });
 };
