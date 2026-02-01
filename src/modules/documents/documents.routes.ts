@@ -17,11 +17,12 @@ router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), D
 // GET - Get All Documents (with optional filters: ?documentType=Agreement&projectId=uuid)
 router.get("/", authenticate, authorizeRoles("admin", "user"), DocumentController.getAllDocuments);
 
-// GET - Get Document Counts by Type
-router.get("/counts/by-type", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentCountsByType);
+// // GET - Get Document Counts by Type
+// router.get("/counts/by-type", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentCountsByType);
 
 // GET - Get Documents by Type (Agreement, plans, permit, others)
-router.get("/type/:documentType", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentsByType);
+// getattr("/type/:documentType") commented out as controller method is disabled
+// router.get("/type/:documentType", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentsByType);
 
 // GET - Get Documents by Project ID
 router.get("/project/:projectId", authenticate, authorizeRoles("admin", "user"), DocumentController.getDocumentsByProject);

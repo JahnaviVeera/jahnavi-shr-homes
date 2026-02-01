@@ -535,6 +535,41 @@ export const getDailyUpdatesByStatusForUser = async (req: RequestWithUser, res: 
 
 /**
  * @swagger
+ * /api/daily-updates/user/updates:
+ *   get:
+ *     summary: Get all daily updates for projects owned by the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User's project updates fetched successfully
+ */
+export const getDailyUpdatesForUser = async (req: RequestWithUser, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
+        }
+
+        const dailyUpdates = await DailyUpdatesServices.getDailyUpdatesForUser(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "User's project daily updates fetched successfully",
+            data: dailyUpdates,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/daily-updates/{dailyUpdateId}/approve:
  *   put:
  *     summary: Approve a daily update (Customer)

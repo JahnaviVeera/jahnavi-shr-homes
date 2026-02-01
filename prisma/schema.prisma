@@ -216,6 +216,10 @@ model Message {
   projectId String?  @db.Uuid
   project   Project? @relation(fields: [projectId], references: [projectId])
 
+  parentId   String?   @db.Uuid
+  parent     Message?  @relation("MessageReplies", fields: [parentId], references: [messageId])
+  replies    Message[] @relation("MessageReplies")
+
   isRead Boolean @default(false)
 
   createdAt DateTime @default(now()) @map("created_at")

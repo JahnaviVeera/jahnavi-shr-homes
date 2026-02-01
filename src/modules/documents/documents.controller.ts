@@ -3,6 +3,7 @@ const DocumentServices = require("./documents.services");
 
 interface MulterRequest extends Request {
     user?: {
+        userId: string;
         email: string;
         role: string;
     };
@@ -81,6 +82,8 @@ interface MulterRequest extends Request {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // POST - Create Document
 exports.createDocument = async (req: MulterRequest, res: Response) => {
@@ -169,12 +172,16 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get Document by ID
-exports.getDocumentById = async (req: Request, res: Response) => {
+exports.getDocumentById = async (req: MulterRequest, res: Response) => {
     try {
         const documentId = req.params.documentId;
-        const document = await DocumentServices.getDocumentById(documentId);
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const document = await DocumentServices.getDocumentById(documentId, userContext);
 
         return res.status(200).json({
             success: true,
@@ -195,6 +202,8 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all documents with optional filters
  *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: projectId
@@ -240,9 +249,11 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get All Documents
-exports.getAllDocuments = async (req: Request, res: Response) => {
+exports.getAllDocuments = async (req: MulterRequest, res: Response) => {
     try {
         const filters: any = {};
 
@@ -255,7 +266,12 @@ exports.getAllDocuments = async (req: Request, res: Response) => {
             filters.search = req.query.search as string;
         }
 
-        const documents = await DocumentServices.getAllDocuments(Object.keys(filters).length > 0 ? filters : undefined);
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const documents = await DocumentServices.getAllDocuments(
+            Object.keys(filters).length > 0 ? filters : undefined,
+            userContext
+        );
 
         return res.status(200).json({
             success: true,
@@ -270,59 +286,63 @@ exports.getAllDocuments = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * @swagger
- * /api/documents/type/{documentType}:
- *   get:
- *     summary: Get documents by type
- *     tags: [Documents]
- *     parameters:
- *       - in: path
- *         name: documentType
- *         required: true
- *         schema:
- *           type: string
- *           enum: ["Agreement", "plans", "permit", "others"]
- *         description: Type of document
- *     responses:
- *       200:
- *         description: Documents fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/SuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         type: object
- *       400:
- *         description: Bad request - Invalid document type
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-// GET - Get Documents by Type
-exports.getDocumentsByType = async (req: Request, res: Response) => {
-    try {
-        const documentType = req.params.documentType;
-        const documents = await DocumentServices.getDocumentsByType(documentType);
+// /**
+//  * @swagger
+//  * /api/documents/type/{documentType}:
+//  *   get:
+//  *     summary: Get documents by type
+//  *     tags: [Documents]
+//  *     parameters:
+//  *       - in: path
+//  *         name: documentType
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *           enum: ["Agreement", "plans", "permit", "others"]
+//  *         description: Type of document
+//  *     responses:
+//  *       200:
+//  *         description: Documents fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               allOf:
+//  *                 - $ref: '#/components/schemas/SuccessResponse'
+//  *                 - type: object
+//  *                   properties:
+//  *                     data:
+//  *                       type: array
+//  *                       items:
+//  *                         type: object
+//  *       400:
+//  *         description: Bad request - Invalid document type
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/ErrorResponse'
+//  *       403:
+//  *         description: Access denied
+//  */
+// // GET - Get Documents by Type
+// exports.getDocumentsByType = async (req: MulterRequest, res: Response) => {
+//     try {
+//         const documentType = req.params.documentType;
+//         const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
 
-        return res.status(200).json({
-            success: true,
-            message: `Documents of type '${documentType}' fetched successfully`,
-            data: documents,
-        });
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
-    }
-};
+//         const documents = await DocumentServices.getDocumentsByType(documentType, userContext);
+
+//         return res.status(200).json({
+//             success: true,
+//             message: `Documents of type '${documentType}' fetched successfully`,
+//             data: documents,
+//         });
+//     } catch (error) {
+//         return res.status(400).json({
+//             success: false,
+//             message: error instanceof Error ? error.message : String(error),
+//         });
+//     }
+// };
 
 /**
  * @swagger
@@ -330,6 +350,8 @@ exports.getDocumentsByType = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get documents by project ID with project details
  *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
  *     description: Returns project details along with all documents for the specified project, including fileName and documentType
  *     parameters:
  *       - in: path
@@ -417,12 +439,16 @@ exports.getDocumentsByType = async (req: Request, res: Response) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get Documents by Project
-exports.getDocumentsByProject = async (req: Request, res: Response) => {
+exports.getDocumentsByProject = async (req: MulterRequest, res: Response) => {
     try {
         const projectId = req.params.projectId;
-        const documents = await DocumentServices.getDocumentsByProject(projectId);
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const documents = await DocumentServices.getDocumentsByProject(projectId, userContext);
 
         return res.status(200).json({
             success: true,
@@ -645,9 +671,17 @@ exports.deleteDocument = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // GET - Download Document File
-exports.downloadDocument = async (req: Request, res: Response) => {
+exports.downloadDocument = async (req: MulterRequest, res: Response) => {
     try {
         const documentId = req.params.documentId;
+
+        // OPTIONAL: Add access control here if critical. 
+        // Currently `getDocumentFile` does not check role.
+        // It's safer to check first.
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+        // Reuse getDocumentById for permission check before download
+        await DocumentServices.getDocumentById(documentId, userContext);
+
         const documentFile = await DocumentServices.getDocumentFile(documentId);
 
         // If we have a fileUrl (Supabase), redirect to it or return it

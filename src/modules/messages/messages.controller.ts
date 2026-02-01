@@ -44,6 +44,10 @@ interface AuthenticatedRequest extends Request {
  *               projectId:
  *                 type: string
  *                 format: uuid
+ *               parentId:
+ *                 type: string
+ *                 format: uuid
+ *                 description: Optional ID of the message being replied to (Required for customers).
  *     responses:
  *       201:
  *         description: Message sent successfully
@@ -54,7 +58,7 @@ interface AuthenticatedRequest extends Request {
  */
 export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { subject, message, receiverId, projectId } = req.body;
+        const { subject, message, receiverId, projectId, parentId } = req.body;
 
         if (!req.user) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
@@ -75,8 +79,10 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
             subject,
             message,
             senderId,
+            senderRole: req.user.role,
             receiverId,
-            projectId
+            projectId,
+            parentId
         });
 
         return res.status(201).json({

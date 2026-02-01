@@ -418,6 +418,40 @@ export const getDailyUpdateImage = async (dailyUpdateId: string) => {
 };
 
 /**
+ * Get all daily updates for projects owned by a specific user (Customer)
+ * @param userId - The ID of the user (customer)
+ * @returns List of daily updates with project details
+ */
+export const getDailyUpdatesForUser = async (userId: string) => {
+    // 1. Get projects owned by this user (Decoupled)
+    const projects = await projectService.getProjectsByCustomerId(userId);
+
+    if (projects.length === 0) {
+        return [];
+    }
+
+    const projectIds = projects.map(p => p.projectId);
+
+    // 2. Fetch daily updates for these projects
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: { in: projectIds }
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    location: true
+                }
+            }
+        }
+    });
+
+    return dailyUpdates;
+};
+
+/**
  * Get daily updates by status for a specific user (Customer)
  * Used to fetch updates for projects owned by the user.
  * @param userId - The ID of the authenticated user

@@ -73,7 +73,7 @@ export const createPayment = async (data: {
             projectId: data.projectId,
             paymentStatus: data.paymentStatus as PaymentStatus,
             paymentType: (data.paymentType as PaymentType) || PaymentType.Standard,
-            paymentMethod: data.paymentMethod as PaymentMethod,
+            paymentMethod: (data.paymentMethod && data.paymentMethod !== "" ? data.paymentMethod : PaymentMethod.cash) as PaymentMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
             paymentDate: new Date(data.paymentDate),
             remarks: data.remarks || null,

@@ -39,7 +39,7 @@ export const createSupervisor = async (data: {
     const savedUser = await prisma.user.create({
         data: {
             userName: data.fullName,
-            role: UserRole.supervisor,
+            role: UserRole.supervisor, // Enforce supervisor role
             email: data.email,
             password: hashedPassword,
             contact: data.phoneNumber,

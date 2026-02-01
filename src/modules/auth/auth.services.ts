@@ -12,8 +12,9 @@ export const adminLogin = async (email: string, password: string) => {
 
     logger.debug(`[adminLogin] Attempting login for email: "${trimmedEmail}"`);
 
-    if (!trimmedEmail) throw new AppError(400, "Email is required");
-    if (!trimmedPassword) throw new AppError(400, "Password is required");
+    if (!trimmedEmail || !trimmedPassword) {
+        throw new AppError(400, "Invalid email or password");
+    }
 
     // 2. Database Lookup (Directly targeting Admin role)
     // We filter by role here to avoid getting a non-admin user with the same email
@@ -137,10 +138,11 @@ export const supervisorLogin = async (email: string, password: string) => {
     if (!trimmedPassword) throw new AppError(400, "Password is required");
 
     // 2. Database Lookup
+    // Search by email first to debug role mismatch issues
     const user = await Prisma.user.findFirst({
         where: {
             email: { equals: trimmedEmail, mode: 'insensitive' },
-            role: UserRole.supervisor
+            // Removed strict role filter here to check if user exists at all
         },
         select: {
             userId: true,
@@ -152,6 +154,12 @@ export const supervisorLogin = async (email: string, password: string) => {
     });
 
     if (!user) {
+
+        throw new AppError(401, "Invalid email or password");
+    }
+
+    // Verify Role Manually
+    if (user.role !== UserRole.supervisor) {
         throw new AppError(401, "Invalid email or password");
     }
 
@@ -164,7 +172,6 @@ export const supervisorLogin = async (email: string, password: string) => {
     if (!isPasswordValid) {
         throw new AppError(401, "Invalid email or password");
     }
-
     // 4. Success
     const token = generateUserToken(user.userId, user.email, user.role);
     return {

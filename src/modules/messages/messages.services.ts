@@ -5,14 +5,22 @@ export const createMessage = async (data: {
     subject?: string;
     message: string;
     senderId: string;
+    senderRole?: string;
     receiverId: string;
     projectId?: string;
+    parentId?: string;
 }) => {
     if (!data.message) {
         throw new Error("Message content is required");
     }
     if (!data.senderId || !data.receiverId) {
         throw new Error("Sender and Receiver IDs are required");
+    }
+
+    // Role-based restriction: Customers can only reply (must have parentId)
+    // Assuming 'user' role is for customers.
+    if (data.senderRole === 'user' && !data.parentId) {
+        throw new Error("Customers can only reply to existing messages initiated by supervisors.");
     }
 
     const createData: any = {
@@ -27,6 +35,10 @@ export const createMessage = async (data: {
         createData.project = { connect: { projectId: data.projectId } };
     }
 
+    if (data.parentId) {
+        createData.parent = { connect: { messageId: data.parentId } };
+    }
+
     const newMessage = await prisma.message.create({
         data: createData,
         include: {
@@ -34,7 +46,8 @@ export const createMessage = async (data: {
                 select: {
                     projectName: true
                 }
-            }
+            },
+            parent: true // Optional: return parent info
         }
     });
 

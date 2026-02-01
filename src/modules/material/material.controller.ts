@@ -140,6 +140,8 @@ exports.getAllMaterials = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get materials by project ID
  *     tags: [Materials]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: projectId

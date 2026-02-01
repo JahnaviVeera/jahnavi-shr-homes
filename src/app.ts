@@ -88,7 +88,8 @@ app.use((err: any, req: Request, res: Response, next: any) => {
 //         msg:"Hello World",
 //     });
 // });
-
 // module.exports = app;
 // module.exports.default = app;
+
+
 export default app;

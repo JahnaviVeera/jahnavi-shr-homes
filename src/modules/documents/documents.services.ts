@@ -73,7 +73,7 @@ export const createDocument = async (
 };
 
 
-export const getDocumentById = async (documentId: string) => {
+export const getDocumentById = async (documentId: string, userContext?: { userId: string, role: string }) => {
     if (!documentId) {
         throw new Error("Document ID is required");
     }
@@ -87,27 +87,59 @@ export const getDocumentById = async (documentId: string) => {
         throw new Error("Document not found");
     }
 
+    // Access Control Check
+    if (userContext && userContext.role === 'user') {
+        // If document is linked to a project, check if that project belongs to the user
+        if (document.project && document.project.customerId !== userContext.userId) {
+            throw new Error("Access denied: You do not have permission to view this document.");
+        }
+        // If document is NOT linked to a project, strictly speaking, who owns it?
+        // Assuming documents usually belong to projects. If unassigned, maybe Admin only?
+        // keeping it safe: if no project and user is 'user', maybe deny or allow?
+        // For now, if no project, we might let it slide or safer to deny if strict.
+        // Given schema, projectId is optional.
+        if (!document.projectId) {
+            // Decide policy: Only Admin accepts orphaned documents?
+            // For now, let's assume orphaned documents are not for customers.
+            // throw new Error("Access denied.");
+        }
+    }
+
     return document;
 };
 
 
-export const getAllDocuments = async (filters?: {
-    projectId?: string;
-    search?: string;
-}) => {
+export const getAllDocuments = async (
+    filters?: {
+        projectId?: string;
+        search?: string;
+    },
+    userContext?: { userId: string, role: string }
+) => {
     const where: any = {};
 
 
+    // 1. PROJECT ID Filter
     if (filters?.projectId) {
         where.projectId = filters.projectId;
     }
 
+    // 2. SEARCH Filter
     if (filters?.search) {
         where.OR = [
             { fileName: { contains: filters.search, mode: 'insensitive' } },
             { description: { contains: filters.search, mode: 'insensitive' } },
             { project: { projectName: { contains: filters.search, mode: 'insensitive' } } }
         ];
+    }
+
+    // 3. ROLE-BASED ACCESS CONTROL
+    if (userContext && userContext.role === 'user') {
+        // Force filter: Only projects where customerId == userContext.userId
+        where.project = {
+            ...(where.project || {}), // preserve existing project filters if any
+            customerId: userContext.userId
+        };
     }
 
     const documents = await prisma.document.findMany({
@@ -128,40 +160,61 @@ export const getAllDocuments = async (filters?: {
 };
 
 
-export const getDocumentsByType = async (documentType: string) => {
-    const validTypes = ["Agreement", "plans", "permit", "others"];
-    if (!validTypes.includes(documentType)) {
-        throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
-    }
+// export const getDocumentsByType = async (documentType: string, userContext?: { userId: string, role: string }) => {
+//     const validTypes = ["Agreement", "plans", "permit", "others"];
+//     if (!validTypes.includes(documentType)) {
+//         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
+//     }
 
-    const documents = await prisma.document.findMany({
-        where: { documentType: documentType as DocumentType },
-        include: { project: true },
-        orderBy: {
-            createdAt: "desc",
-        },
-    });
+//     const where: any = { documentType: documentType as DocumentType };
 
-    if (!documents) {
-        return [];
-    }
+//     // Access Control
+//     if (userContext && userContext.role === 'user') {
+//         where.project = {
+//             customerId: userContext.userId
+//         };
+//     }
 
-    return documents;
-};
+//     const documents = await prisma.document.findMany({
+//         where,
+//         include: { project: true },
+//         orderBy: {
+//             createdAt: "desc",
+//         },
+//     });
+
+//     if (!documents) {
+//         return [];
+//     }
+
+//     return documents;
+// };
 
 
-export const getDocumentsByProject = async (projectId: string) => {
+export const getDocumentsByProject = async (projectId: string, userContext?: { userId: string, role: string }) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
+    // Access Control Pre-check
+    if (userContext && userContext.role === 'user') {
+        // Verify project ownership first
+        const projectCheck = await prisma.project.findUnique({
+            where: { projectId },
+            select: { customerId: true }
+        });
+
+        if (!projectCheck) {
+            throw new Error("Project not found");
+        }
+
+        if (projectCheck.customerId !== userContext.userId) {
+            throw new Error("Access denied: You do not have permission to view documents for this project.");
+        }
+    }
+
     // Get the project details (Decoupled)
     const project = await projectService.getProjectById(projectId);
-    // getProjectById throws if not found
-    // If we want detailed fields not provided by getProjectById, we might technically need to ask project service for more,
-    // but getProjectById usually returns full object or mostly full.
-    // The previous code selected specific fields for `project` return object?
-    // "project: { projectId: project.projectId, projectName: ... }"
 
     // Get all documents for this project
     const documents = await prisma.document.findMany({

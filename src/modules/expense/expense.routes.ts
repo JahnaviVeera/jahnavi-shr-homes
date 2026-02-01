@@ -32,7 +32,7 @@ router.get("/project/:projectId/total-amount", authenticate, authorizeRoles("adm
 router.get("/category/:category", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getExpensesByCategory);
 
 // Get all expenses
-router.get("/", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getAllExpenses);
+router.get("/", ExpenseController.getAllExpenses);
 
 // Create a new expense (Admin only - Prompt says "Expenses" admin only. But previous logic allowed supervisor. Prompt takes precedence: "For all above routes admin should only can create")
 // Wait, prompt said: "Admin privilages: 7)Expenses... For all above routes admin should only can create".

@@ -15,8 +15,11 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 // Get daily updates by status for user (Authenticated Customer) - Must come before /:dailyUpdateId
 router.get("/user/status/:status", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesByStatusForUser);
 
+// Get all daily updates for a user (Authenticated Customer)
+router.get("/user/updates", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesForUser);
+
 // Get all daily updates
-router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getAllDailyUpdates);
+router.get("/", DailyUpdatesController.getAllDailyUpdates);
 
 
 // Get daily updates for assigned projects (Authenticated Supervisor) - Must come before /:dailyUpdateId

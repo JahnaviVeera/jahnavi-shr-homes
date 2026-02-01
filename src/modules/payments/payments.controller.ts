@@ -1,6 +1,7 @@
 ﻿import type { Request, Response } from "express";
 const PaymentServices = require("./payments.services");
 
+
 /**
  * @swagger
  * /api/payment/createpayment:
@@ -201,7 +202,6 @@ exports.getPaymentById = async (req: Request, res: Response) => {
     }
 }
 
-
 /**
  * @swagger
  * /api/payment/getallpayments:
@@ -271,7 +271,6 @@ exports.getAllPayments = async (req: Request, res: Response) => {
         })
     }
 }
-
 
 /**
  * @swagger
@@ -388,7 +387,6 @@ exports.updatePayment = async (req: Request, res: Response) => {
         })
     }
 }
-
 
 /**
  * @swagger
@@ -591,7 +589,3 @@ exports.getBudgetSummaryByProject = async (req: Request, res: Response) => {
         })
     }
 }
-
-
-
-
