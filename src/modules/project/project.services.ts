@@ -73,6 +73,19 @@ export const createProject = async (data:
         }
     }
 
+    // Check if project already exists for this customer with the same name and location
+    const existingProject = await prisma.project.findFirst({
+        where: {
+            projectName: data.projectName,
+            customerId: data.customerId as string,
+            location: data.location
+        }
+    });
+
+    if (existingProject) {
+        throw new Error("Project with this name and location already exists for this customer");
+    }
+
     const newProject = await prisma.project.create({
         data: {
             projectName: data.projectName,

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken, extractTokenFromHeader } from "../utils/jwt";
 import { AppError } from "../utils/AppError";
 import logger from "../utils/logger";
+import Prisma from "../config/prisma.client";
 
 interface AuthRequest extends Request {
     user?: {
@@ -32,6 +33,15 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
         if (!decoded) {
             return next(new AppError(401, "Invalid or expired token"));
+        }
+
+        // Check if token is blacklisted
+        const isBlacklisted = await Prisma.tokenBlacklist.findUnique({
+            where: { token }
+        });
+
+        if (isBlacklisted) {
+            return next(new AppError(401, "Token has been invalidated. Please log in again."));
         }
 
         // Attach user info to request object

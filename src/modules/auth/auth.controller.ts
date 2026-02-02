@@ -1,5 +1,7 @@
 ﻿import type { Request, Response, NextFunction } from "express";
-const authServices = require("./auth.services");
+import * as authServices from "./auth.services";
+import jwt from "jsonwebtoken";
+import { extractTokenFromHeader } from "../../utils/jwt";
 
 /**
  * @swagger
@@ -56,7 +58,7 @@ const authServices = require("./auth.services");
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.adminLogin = async (req: Request, res: Response, next: NextFunction) => {
+export const adminLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
 
@@ -132,7 +134,7 @@ exports.adminLogin = async (req: Request, res: Response, next: NextFunction) => 
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.userLogin = async (req: Request, res: Response, next: NextFunction) => {
+export const userLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
 
@@ -209,7 +211,7 @@ exports.userLogin = async (req: Request, res: Response, next: NextFunction) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-exports.supervisorLogin = async (req: Request, res: Response, next: NextFunction) => {
+export const supervisorLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
         // console.log(email, password);
@@ -228,3 +230,51 @@ exports.supervisorLogin = async (req: Request, res: Response, next: NextFunction
     }
 };
 
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logout successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ */
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const authHeader = req.headers.authorization;
+        const token = extractTokenFromHeader(authHeader);
+
+        if (!token) {
+            return res.status(200).json({
+                success: true,
+                message: "Logged out successfully"
+            });
+        }
+
+        const decoded: any = jwt.decode(token);
+        const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        const result = await authServices.logout(token, expiresAt);
+
+        return res.status(200).json({
+            success: result.success,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+};

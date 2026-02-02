@@ -186,3 +186,31 @@ export const supervisorLogin = async (email: string, password: string) => {
         userId: user.userId
     };
 };
+
+/**
+ * Logout Service
+ * Add token to blacklist to prevent further use
+ * @param token - JWT token to blacklist
+ * @param expiresAt - Expiration date of the token
+ */
+export const logout = async (token: string, expiresAt: Date) => {
+    try {
+        await Prisma.tokenBlacklist.create({
+            data: {
+                token,
+                expiresAt
+            }
+        });
+
+        return {
+            success: true,
+            message: "Logged out successfully"
+        };
+    } catch (error) {
+        // If token already blacklisted, still return success
+        return {
+            success: true,
+            message: "Logged out successfully"
+        };
+    }
+};

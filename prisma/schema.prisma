@@ -390,3 +390,12 @@ model Quotation {
 
   @@map("quotations")
 }
+
+model TokenBlacklist {
+  id        String   @id @default(uuid()) @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("token_blacklist")
+}
