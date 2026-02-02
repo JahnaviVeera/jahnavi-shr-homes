@@ -141,7 +141,56 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
 };
 
 
-// ... (get functions)
+// Get all quotations
+export const getAllTheQuotations = async () => {
+    const quotations = await prisma.quotation.findMany({
+        include: { project: { include: { customer: true } }, user: true },
+        orderBy: { createdAt: "desc" }
+    });
+
+    if (!quotations || quotations.length === 0) {
+        return [];
+    }
+
+    return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
+};
+
+// Get quotation by ID
+export const getQuotationByQuotationId = async (quotationId: string) => {
+    if (!quotationId) {
+        throw new Error("Quotation ID is required");
+    }
+
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        include: { project: { include: { customer: true } }, user: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return formatQuotationResponse(quotation);
+};
+
+// Get quotation total amount
+export const getQuotationTotalAmount = async (quotationId: string) => {
+    if (!quotationId) {
+        throw new Error("Quotation ID is required");
+    }
+
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        select: { totalAmount: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return quotation.totalAmount;
+};
+
 
 // Update quotation
 export const updateQuotation = async (quotationId: string, updateData: {
