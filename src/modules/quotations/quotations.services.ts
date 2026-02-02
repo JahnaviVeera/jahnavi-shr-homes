@@ -69,12 +69,14 @@ export const createQuotation = async (data:
         userIdToUse = projectExists.customer.userId;
     }
 
+    const dateString = data.date ? (data.date instanceof Date ? data.date.toISOString().split('T')[0] : new Date(data.date).toISOString().split('T')[0]) : null;
+
     const newQuotation = await prisma.quotation.create({
         data: {
             totalAmount: finalTotalAmount,
             status: data.status as QuotationStatus,
             lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
-            date: data.date || null,
+            date: dateString,
             projectId: data.projectId,
             userId: userIdToUse || null,
             customerName: data.customerName || null,
@@ -128,7 +130,7 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         customerName: quotation.customerName || customer?.userName || null,
         customerEmail: customer?.email || null,
         status: quotation.status,
-        date: quotation.date ? new Date(quotation.date).toISOString().split('T')[0] : null,
+        date: quotation.date || null,
         lineItems: quotation.lineItems || [],
         totalAmount: parseFloat(String(quotation.totalAmount || 0)),
         fileName: quotation.fileName || null,

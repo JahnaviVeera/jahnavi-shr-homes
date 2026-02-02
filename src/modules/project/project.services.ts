@@ -1,17 +1,14 @@
 ﻿import prisma from "../../config/prisma.client";
 import { ProjectStatus, ProjectType, Prisma } from "@prisma/client";
 
-// Helper function to parse date strings to Date objects
-const parseDate = (dateInput: string | Date): Date => {
-    if (dateInput instanceof Date) {
-        return dateInput;
-    }
-    // If it's a date string like "2024-01-15", convert to full ISO date
-    const date = new Date(dateInput);
+// Helper function to format date inputs as YYYY-MM-DD strings
+const formatDateString = (dateInput: string | Date | undefined | null): string => {
+    if (!dateInput) return "";
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
     if (isNaN(date.getTime())) {
         throw new Error(`Invalid date format: ${dateInput}`);
     }
-    return date;
+    return date.toISOString().split('T')[0];
 };
 
 import SocketService from "../../services/socket.service";
@@ -92,8 +89,8 @@ export const createProject = async (data:
             projectType: data.projectType as ProjectType,
             location: data.location,
             initialStatus: data.initialStatus as ProjectStatus,
-            startDate: parseDate(data.startDate),
-            expectedCompletion: parseDate(data.expectedCompletion),
+            startDate: formatDateString(data.startDate),
+            expectedCompletion: formatDateString(data.expectedCompletion),
             totalBudget: data.totalBudget,
             materialName: data.materialName || "",
             quantity: data.quantity || 0,
@@ -203,8 +200,8 @@ export const updateProject = async (projectId: string, updateData: {
         dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
     }
 
-    if (updateData.startDate !== undefined) dataToUpdate.startDate = parseDate(updateData.startDate);
-    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = parseDate(updateData.expectedCompletion);
+    if (updateData.startDate !== undefined) dataToUpdate.startDate = formatDateString(updateData.startDate);
+    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = formatDateString(updateData.expectedCompletion);
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;

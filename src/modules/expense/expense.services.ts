@@ -7,7 +7,7 @@ export const createExpense = async (data: {
     projectId: string;
     category: string;
     amount: number;
-    date: Date;
+    date: Date | string;
     description?: string | null;
     status?: string;
 }) => {
@@ -38,18 +38,19 @@ export const createExpense = async (data: {
         throw new Error("Date is required");
     }
 
-    // Ensure date is a valid Date object
-    const parsedDate = new Date(data.date);
-    if (isNaN(parsedDate.getTime())) {
-        throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
+    // Format date as YYYY-MM-DD string
+    const expenseDate = new Date(data.date);
+    if (isNaN(expenseDate.getTime())) {
+        throw new Error("Invalid date format. Expected ISO-8601 Date string.");
     }
+    const dateString = expenseDate.toISOString().split('T')[0];
 
     const newExpense = await prisma.expense.create({
         data: {
             projectId: data.projectId,
             category: data.category as ExpenseCategory,
             amount: data.amount,
-            date: parsedDate,
+            date: dateString,
             description: data.description || null,
             status: data.status as ExpenseStatus || ExpenseStatus.pending,
             createdAt: new Date(),
@@ -224,9 +225,9 @@ export const updateExpense = async (expenseId: string, updateData: {
     if (updateData.date !== undefined) {
         const parsedDate = new Date(updateData.date);
         if (isNaN(parsedDate.getTime())) {
-            throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
+            throw new Error("Invalid date format. Expected ISO-8601 Date string.");
         }
-        dataToUpdate.date = parsedDate;
+        dataToUpdate.date = parsedDate.toISOString().split('T')[0];
     }
 
     if (updateData.description !== undefined) {
@@ -303,8 +304,7 @@ export const getExpenseSummaryAllProjects = async () => {
         // Group expenses by month
         const monthlyExpenseMap: { [key: string]: number } = {};
         projectExpenses.forEach((expense: any) => {
-            const expenseDate = new Date(expense.date);
-            const monthKey = `${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}`;
+            const monthKey = expense.date.substring(0, 7); // Extracts "YYYY-MM" from "YYYY-MM-DD"
 
             if (!monthlyExpenseMap[monthKey]) {
                 monthlyExpenseMap[monthKey] = 0;
@@ -363,8 +363,7 @@ export const getExpenseSummaryByProject = async (projectId: string) => {
     const expensesPerMonth: { [key: string]: number } = {};
 
     expenses.forEach((expense: any) => {
-        const expenseDate = new Date(expense.date);
-        const monthKey = `${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = expense.date.substring(0, 7); // Extracts "YYYY-MM" from "YYYY-MM-DD"
 
         if (!expensesPerMonth[monthKey]) {
             expensesPerMonth[monthKey] = 0;

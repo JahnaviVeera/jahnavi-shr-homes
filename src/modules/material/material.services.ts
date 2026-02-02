@@ -36,7 +36,7 @@ export const createMaterial = async (data: {
             projectId: data.projectId,
             materialName: data.materialName,
             quantity: data.quantity,
-            date: parsedDate,
+            date: parsedDate.toISOString().split('T')[0],
             notes: data.notes || null,
             vendor: data.vendor || null,
             createdAt: new Date(),
@@ -238,7 +238,7 @@ export const updateMaterial = async (materialId: string, updateData: {
         if (isNaN(parsedDate.getTime())) {
             throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
         }
-        dataToUpdate.date = parsedDate;
+        dataToUpdate.date = parsedDate.toISOString().split('T')[0];
     }
 
     if (updateData.notes !== undefined) {
