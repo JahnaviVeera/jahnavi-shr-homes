@@ -197,9 +197,15 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
                         }
                     }
 
-                    if (!item || typeof item !== 'object' || !item.description || typeof item.amount !== 'number') {
+                    // Handle amount as number or string (from frontend form data)
+                    const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+
+                    if (!item || typeof item !== 'object' || !item.description || typeof amount !== 'number' || isNaN(amount)) {
                         throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                     }
+
+                    // Ensure amount is stored as a number
+                    item.amount = amount;
                 }
             } catch (parseError) {
                 return res.status(400).json({
@@ -579,9 +585,14 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
 
                     // Validate each item has description and amount
                     for (const item of lineItems) {
-                        if (!item.description || typeof item.amount !== 'number') {
+                        const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+
+                        if (!item.description || typeof amount !== 'number' || isNaN(amount)) {
                             throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                         }
+
+                        // Ensure amount is stored as a number
+                        item.amount = amount;
                     }
                 }
 
