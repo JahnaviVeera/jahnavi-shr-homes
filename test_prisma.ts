@@ -10,7 +10,11 @@ async function test() {
         });
     } catch (e) {
         // We expect an error because the ID doesn't exist, but we check if the error is about the field
-        console.log(e.message);
+        if (e instanceof Error) {
+            console.log(e.message);
+        } else {
+            console.log(e);
+        }
     } finally {
         await prisma.$disconnect();
     }
