@@ -4,6 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "kill-port": "node src/scripts/kill-port.js",
+    "predev": "npm run kill-port",
     "clean": "node -e \"const fs = require('fs'); if (fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true });\"",
     "prebuild": "npm run clean",
     "build": "npx prisma generate && tsc --outDir dist",
@@ -13,7 +15,8 @@
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:deploy": "npx prisma migrate deploy",
     "setup:bucket": "npx ts-node src/scripts/createSupabaseBucket.ts",
-    "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts"
+    "setup:uploads-bucket": "npx ts-node src/scripts/createUploadsBucket.ts",
+    "seed:admin": "npx ts-node src/scripts/seed-admin.ts"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +26,7 @@
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "@supabase/supabase-js": "^2.91.0",
+    "@types/socket.io": "^3.0.1",
     "bcrypt": "^6.0.0",
     "build": "^0.1.4",
     "class-transformer": "^0.5.1",
@@ -38,8 +42,10 @@
     "multer": "^2.0.2",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
+    "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -52,6 +58,7 @@
     "@types/swagger-ui-express": "^4.1.8",
     "nodemon": "^3.1.11",
     "prisma": "^7.3.0",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",

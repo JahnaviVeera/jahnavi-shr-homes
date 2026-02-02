@@ -5,14 +5,22 @@ export const createMessage = async (data: {
     subject?: string;
     message: string;
     senderId: string;
+    senderRole?: string;
     receiverId: string;
     projectId?: string;
+    parentId?: string;
 }) => {
     if (!data.message) {
         throw new Error("Message content is required");
     }
     if (!data.senderId || !data.receiverId) {
         throw new Error("Sender and Receiver IDs are required");
+    }
+
+    // Role-based restriction: Customers can only reply (must have parentId)
+    // Assuming 'user' role is for customers.
+    if (data.senderRole === 'user' && !data.parentId) {
+        throw new Error("Customers can only reply to existing messages initiated by supervisors.");
     }
 
     const createData: any = {
@@ -27,12 +35,44 @@ export const createMessage = async (data: {
         createData.project = { connect: { projectId: data.projectId } };
     }
 
+    if (data.parentId) {
+        createData.parent = { connect: { messageId: data.parentId } };
+    }
+
     const newMessage = await prisma.message.create({
         data: createData,
         include: {
             project: {
                 select: {
                     projectName: true
+                }
+            },
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            },
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
                 }
             }
         }
@@ -62,6 +102,34 @@ export const getMessagesForUser = async (userId: string) => {
                     projectName: true,
                     projectId: true
                 }
+            },
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            }, // Include parent message info
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
+                }
             }
         }
     });
@@ -80,6 +148,42 @@ export const getMessagesByProject = async (projectId: string) => {
         },
         orderBy: {
             createdAt: "desc"
+        },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    projectId: true
+                }
+            },
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            },
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            }
         }
     });
 

@@ -1,9 +1,7 @@
 ﻿const express = require("express");
 const router = express.Router();
 const UserController = require("./user.controller");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
-const { customerAuthMiddleware } = require("../../middleware/customerAuth.middleware");
-const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -14,48 +12,48 @@ const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
 
 
 router.get("/", UserController.getAllUsers);
-router.get("/leads/stats", adminAuthMiddleware, UserController.getCustomerLeadsStats);
-router.get("/leads/new", adminAuthMiddleware, UserController.getNewLeads);
-router.get("/leads/closed", adminAuthMiddleware, UserController.getClosedCustomers);
+router.get("/leads/stats", authenticate, authorizeRoles("admin"), UserController.getCustomerLeadsStats);
+router.get("/leads/new", authenticate, authorizeRoles("admin"), UserController.getNewLeads);
+router.get("/leads/closed", authenticate, authorizeRoles("admin"), UserController.getClosedCustomers);
 
 
 
 
-router.post("/", adminAuthMiddleware, UserController.createUser);
+router.post("/", authenticate, authorizeRoles("admin"), UserController.createUser);
 
 // Admin Account Settings (email, company, contact)
-router.get("/admin/account-settings", adminAuthMiddleware, UserController.getAdminAccountSettings);
+router.get("/admin/account-settings", authenticate, authorizeRoles("admin"), UserController.getAdminAccountSettings);
 
-router.put("/admin/account-settings", adminAuthMiddleware, UserController.updateAdminAccountSettings);
+router.put("/admin/account-settings", authenticate, authorizeRoles("admin"), UserController.updateAdminAccountSettings);
 
 // Admin General Settings (timezone, currency, language)
-router.get("/admin/general-settings", adminAuthMiddleware, UserController.getAdminGeneralSettings);
+router.get("/admin/general-settings", authenticate, authorizeRoles("admin"), UserController.getAdminGeneralSettings);
 
-router.put("/admin/general-settings", adminAuthMiddleware, UserController.updateAdminGeneralSettings);
+router.put("/admin/general-settings", authenticate, authorizeRoles("admin"), UserController.updateAdminGeneralSettings);
 
 // Admin Password
-router.post("/admin/change-password", adminAuthMiddleware, UserController.changeAdminPassword);
+router.post("/admin/change-password", authenticate, authorizeRoles("admin"), UserController.changeAdminPassword);
 
 
-router.put("/profile", userAuthMiddleware, UserController.updateUserProfile);
+router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.updateUserProfile);
 
 
-router.post("/profile/change-password", userAuthMiddleware, UserController.changeUserPassword);
+router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.changeUserPassword);
 
 
-router.get("/:userId", UserController.getuserById);
+router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.getuserById);
 
 
-router.put("/:userId", adminAuthMiddleware, UserController.updateUser);
+router.put("/:userId", authenticate, authorizeRoles("admin"), UserController.updateUser);
 
 
-router.delete("/:userId", adminAuthMiddleware, UserController.deleteUser);
+router.delete("/:userId", authenticate, authorizeRoles("admin"), UserController.deleteUser);
 
 
-router.post("/:userId/approve-supervisor", customerAuthMiddleware, UserController.approveSupervisor);
+router.post("/:userId/approve-supervisor", authenticate, authorizeRoles("user"), UserController.approveSupervisor);
 
 
-router.post("/:userId/reject-supervisor", customerAuthMiddleware, UserController.rejectSupervisor);
+router.post("/:userId/reject-supervisor", authenticate, authorizeRoles("user"), UserController.rejectSupervisor);
 
 export default router;
 

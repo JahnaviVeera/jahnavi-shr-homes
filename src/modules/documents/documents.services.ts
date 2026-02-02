@@ -1,12 +1,14 @@
 ﻿import prisma from "../../config/prisma.client";
 import { DocumentType } from "@prisma/client";
 import { fileUploadService } from "../../services/fileUpload.service";
+import * as projectService from "../project/project.services";
 
 export const createDocument = async (
     data: {
         documentType: string;
         description?: string;
         projectId?: string;
+        userId?: string;
         createdAt?: Date;
         updatedAt?: Date;
     },
@@ -36,8 +38,8 @@ export const createDocument = async (
     try {
         const uploadResult = await fileUploadService.uploadFile({
             file: file as any,
-            bucket: 'documents', // Using 'documents' bucket
-            folder: 'project_docs'
+            bucket: 'uploads', // Using 'documents' bucket
+            folder: 'documents'
         });
         fileUrl = uploadResult.publicUrl;
         fileId = uploadResult.id;
@@ -59,7 +61,13 @@ export const createDocument = async (
     };
 
     if (data.projectId) {
+        // Optionally validate project existence here using service?
+        // await projectService.getProjectById(data.projectId);
         createData.project = { connect: { projectId: data.projectId } };
+    }
+
+    if (data.userId) {
+        createData.user = { connect: { userId: data.userId } };
     }
 
     const newDocument = await prisma.document.create({
@@ -70,7 +78,7 @@ export const createDocument = async (
 };
 
 
-export const getDocumentById = async (documentId: string) => {
+export const getDocumentById = async (documentId: string, userContext?: { userId: string, role: string }) => {
     if (!documentId) {
         throw new Error("Document ID is required");
     }
@@ -84,26 +92,65 @@ export const getDocumentById = async (documentId: string) => {
         throw new Error("Document not found");
     }
 
+    // Access Control Check
+    if (userContext && userContext.role === 'user') {
+        let hasAccess = false;
+
+        // 1. Check project ownership if linked to project
+        if (document.project && document.project.customerId === userContext.userId) {
+            hasAccess = true;
+        }
+
+        // 2. Check direct user link (Casting to any to handle stale Prisma types)
+        if ((document as any).userId === userContext.userId) {
+            hasAccess = true;
+        }
+
+        if (!hasAccess) {
+            throw new Error("Access denied: You do not have permission to view this document.");
+        }
+    }
+
     return document;
 };
 
 
-export const getAllDocuments = async (filters?: {
-    projectId?: string;
-    search?: string;
-}) => {
+export const getAllDocuments = async (
+    filters?: {
+        projectId?: string;
+        search?: string;
+    },
+    userContext?: { userId: string, role: string }
+) => {
     const where: any = {};
 
 
+    // 1. PROJECT ID Filter
     if (filters?.projectId) {
         where.projectId = filters.projectId;
     }
 
+    // 2. SEARCH Filter
     if (filters?.search) {
         where.OR = [
             { fileName: { contains: filters.search, mode: 'insensitive' } },
             { description: { contains: filters.search, mode: 'insensitive' } },
             { project: { projectName: { contains: filters.search, mode: 'insensitive' } } }
+        ];
+    }
+
+    // 3. ROLE-BASED ACCESS CONTROL
+    if (userContext && userContext.role === 'user') {
+        // Force filter: Only projects where customerId == userContext.userId OR direct userId link
+        where.OR = [
+            {
+                project: {
+                    customerId: userContext.userId
+                }
+            },
+            {
+                userId: userContext.userId
+            }
         ];
     }
 
@@ -125,41 +172,61 @@ export const getAllDocuments = async (filters?: {
 };
 
 
-export const getDocumentsByType = async (documentType: string) => {
-    const validTypes = ["Agreement", "plans", "permit", "others"];
-    if (!validTypes.includes(documentType)) {
-        throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
-    }
+// export const getDocumentsByType = async (documentType: string, userContext?: { userId: string, role: string }) => {
+//     const validTypes = ["Agreement", "plans", "permit", "others"];
+//     if (!validTypes.includes(documentType)) {
+//         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
+//     }
 
-    const documents = await prisma.document.findMany({
-        where: { documentType: documentType as DocumentType },
-        include: { project: true },
-        orderBy: {
-            createdAt: "desc",
-        },
-    });
+//     const where: any = { documentType: documentType as DocumentType };
 
-    if (!documents) {
-        return [];
-    }
+//     // Access Control
+//     if (userContext && userContext.role === 'user') {
+//         where.project = {
+//             customerId: userContext.userId
+//         };
+//     }
 
-    return documents;
-};
+//     const documents = await prisma.document.findMany({
+//         where,
+//         include: { project: true },
+//         orderBy: {
+//             createdAt: "desc",
+//         },
+//     });
+
+//     if (!documents) {
+//         return [];
+//     }
+
+//     return documents;
+// };
 
 
-export const getDocumentsByProject = async (projectId: string) => {
+export const getDocumentsByProject = async (projectId: string, userContext?: { userId: string, role: string }) => {
     if (!projectId) {
         throw new Error("Project ID is required");
     }
 
-    // Get the project details
-    const project = await prisma.project.findUnique({
-        where: { projectId }
-    });
+    // Access Control Pre-check
+    if (userContext && userContext.role === 'user') {
+        // Verify project ownership first
+        const projectCheck = await prisma.project.findUnique({
+            where: { projectId },
+            select: { customerId: true }
+        });
 
-    if (!project) {
-        throw new Error("Project not found");
+        if (!projectCheck) {
+            throw new Error("Project not found");
+        }
+
+        if (projectCheck.customerId !== userContext.userId) {
+            throw new Error("Access denied: You do not have permission to view documents for this project.");
+        }
     }
+
+    // Get the project details (Decoupled)
+    const project = await projectService.getProjectById(projectId);
 
     // Get all documents for this project
     const documents = await prisma.document.findMany({
@@ -169,22 +236,7 @@ export const getDocumentsByProject = async (projectId: string) => {
         },
     });
 
-    if (!documents || documents.length === 0) {
-        return {
-            project: {
-                projectId: project.projectId,
-                projectName: project.projectName || "",
-                projectType: project.projectType || "",
-                location: project.location || "",
-                totalBudget: parseFloat(project.totalBudget.toString()) || 0,
-                startDate: project.startDate,
-                expectedCompletion: project.expectedCompletion,
-            },
-            documents: []
-        };
-    }
-
-    // Format documents with fileName and documentType name
+    // Reuse the mapping logic from original file
     const formattedDocuments = documents.map((doc: any) => ({
         documentId: doc.documentId,
         fileName: doc.fileName,
@@ -217,6 +269,7 @@ export const updateDocument = async (
         documentType?: string;
         description?: string;
         projectId?: string | null;
+        userId?: string | null;
         updatedAt?: Date;
     },
     file?: {
@@ -252,9 +305,20 @@ export const updateDocument = async (
     // Update project ID if provided
     if (updateData.projectId !== undefined) {
         if (updateData.projectId) {
+            // Validate via service?
+            await projectService.getProjectById(updateData.projectId);
             dataToUpdate.project = { connect: { projectId: updateData.projectId } };
         } else {
             dataToUpdate.project = { disconnect: true };
+        }
+    }
+
+    // Update user ID if provided
+    if (updateData.userId !== undefined) {
+        if (updateData.userId) {
+            dataToUpdate.user = { connect: { userId: updateData.userId } };
+        } else {
+            dataToUpdate.user = { disconnect: true };
         }
     }
 
@@ -264,8 +328,8 @@ export const updateDocument = async (
         try {
             const uploadResult = await fileUploadService.uploadFile({
                 file: file as any,
-                bucket: 'documents',
-                folder: 'project_docs'
+                bucket: 'uploads',
+                folder: 'documents'
             });
             dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
             dataToUpdate.fileName = file.originalname;
@@ -337,10 +401,7 @@ export const getDocumentFile = async (documentId: string) => {
     };
 };
 
-/**
- * Get total count of documents by type
- * Returns counts for Agreement, plans, permit, and others
- */
+
 export const getDocumentCountsByType = async () => {
     // Get counts for each document type
     const counts = await prisma.document.groupBy({
@@ -371,6 +432,3 @@ export const getDocumentCountsByType = async () => {
 
     return result;
 };
-
-
-

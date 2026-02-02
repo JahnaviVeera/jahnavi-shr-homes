@@ -2,9 +2,7 @@
 const router = express.Router();
 const DailyUpdatesController = require("./daily-updates.controller");
 const upload = require("../../config/multer.config").default;
-const { supervisorAuthMiddleware } = require("../../middleware/supervisorAuth.middleware");
-const { userAuthMiddleware } = require("../../middleware/userAuth.middleware");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -13,50 +11,60 @@ const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware")
  *     description: Daily construction updates management endpoints
  */
 
-
 // Get daily updates by status for user (Authenticated Customer) - Must come before /:dailyUpdateId
-router.get("/user/status/:status", userAuthMiddleware, DailyUpdatesController.getDailyUpdatesByStatusForUser);
+router.get("/user/status/:status", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesByStatusForUser);
+
+// Get all daily updates for a user (Authenticated Customer)
+router.get("/user/updates", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesForUser);
 
 // Get all daily updates
-router.get("/", DailyUpdatesController.getAllDailyUpdates);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getAllDailyUpdates);
 
-const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware");
+// Get pending daily updates
+router.get("/pending", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getPendingDailyUpdates);
+
+// Get approved daily updates
+router.get("/approved", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getApprovedDailyUpdates);
+
+// Get rejected daily updates
+router.get("/rejected", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getRejectedDailyUpdates);
 
 // Get daily updates for assigned projects (Authenticated Supervisor) - Must come before /:dailyUpdateId
-router.get("/supervisor/assigned-projects", supervisorAuthMiddleware, DailyUpdatesController.getDailyUpdatesForSupervisor);
+router.get("/supervisor/assigned-projects", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.getDailyUpdatesForSupervisor);
 
-// Get supervisor stats (Public - Supervisor ID via query param)
-router.get("/supervisor/stats", DailyUpdatesController.getSupervisorStats);
+// Get supervisor stats (Public - Supervisor ID via query param) - Keeping it public as requested previously, or restricting to admin/supervisor? Prompt said "Supervisor privileges...". Let's restrict to authenticated users at least.
+// Let's protect it. "Supervisor privileges - Uploading dailyupdates...". Stats could be public or admin. I'll make it Auth required for now.
+router.get("/supervisor/stats", authenticate, authorizeRoles("admin", "supervisor"), DailyUpdatesController.getSupervisorStats);
 
 // Get construction timeline for a project (Admin or Supervisor)
-router.get("/project/:projectId/timeline", adminOrSupervisorAuthMiddleware, DailyUpdatesController.getConstructionTimeline);
+router.get("/project/:projectId/timeline", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getConstructionTimeline);
 
 // Create a new daily update (Supervisor only)
 // Matches POST /api/daily-updates
 // Body must include 'constructionStage'. Optional: 'image', 'video'
-router.post("/", supervisorAuthMiddleware, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), DailyUpdatesController.createDailyUpdate);
+router.post("/", authenticate, authorizeRoles("supervisor"), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), DailyUpdatesController.createDailyUpdate);
 
 // Download daily update image
 // Must come before /:dailyUpdateId if using regex, but here it's fine as "image" is literal
-router.get("/:dailyUpdateId/image", DailyUpdatesController.downloadImage);
+router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.downloadImage);
 
 // Download daily update video
-router.get("/:dailyUpdateId/video", DailyUpdatesController.downloadVideo);
+router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.downloadVideo);
 
 // Approve daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/approve", userAuthMiddleware, DailyUpdatesController.approveDailyUpdate);
+router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("user"), DailyUpdatesController.approveDailyUpdate);
 
 // Reject daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/reject", userAuthMiddleware, DailyUpdatesController.rejectDailyUpdate);
+router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("user"), DailyUpdatesController.rejectDailyUpdate);
 
 // Get daily update by ID (General access, maybe restricted later?)
-router.get("/:dailyUpdateId", DailyUpdatesController.getDailyUpdateById);
+router.get("/:dailyUpdateId", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getDailyUpdateById);
 
 // Update daily update (Supervisor only)
 // Matches PUT /api/daily-updates/:dailyUpdateId
-router.put("/:dailyUpdateId", supervisorAuthMiddleware, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), DailyUpdatesController.updateDailyUpdate);
+router.put("/:dailyUpdateId", authenticate, authorizeRoles("supervisor"), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), DailyUpdatesController.updateDailyUpdate);
 
 // Delete daily update (Supervisor only)
-router.delete("/:dailyUpdateId", supervisorAuthMiddleware, DailyUpdatesController.deleteDailyUpdate);
+router.delete("/:dailyUpdateId", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.deleteDailyUpdate);
 
 export default router;

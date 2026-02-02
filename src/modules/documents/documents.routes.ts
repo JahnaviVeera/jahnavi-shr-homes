@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const DocumentController = require("./documents.controller");
 const upload = require("../../config/multer.config").default;
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -12,31 +12,32 @@ const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware")
  */
 
 // POST - Create Document (Admin only)
-router.post("/", adminAuthMiddleware, upload.single("file"), DocumentController.createDocument);
+router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), DocumentController.createDocument);
 
 // GET - Get All Documents (with optional filters: ?documentType=Agreement&projectId=uuid)
-router.get("/", DocumentController.getAllDocuments);
+router.get("/", authenticate, authorizeRoles("admin", "user"), DocumentController.getAllDocuments);
 
-// GET - Get Document Counts by Type
-router.get("/counts/by-type", DocumentController.getDocumentCountsByType);
+// // GET - Get Document Counts by Type
+// router.get("/counts/by-type", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentCountsByType);
 
 // GET - Get Documents by Type (Agreement, plans, permit, others)
-router.get("/type/:documentType", DocumentController.getDocumentsByType);
+// getattr("/type/:documentType") commented out as controller method is disabled
+// router.get("/type/:documentType", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentsByType);
 
 // GET - Get Documents by Project ID
-router.get("/project/:projectId", DocumentController.getDocumentsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "user"), DocumentController.getDocumentsByProject);
 
 // GET - Get Document by ID
-router.get("/:documentId", DocumentController.getDocumentById);
+router.get("/:documentId", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentById);
 
 // GET - Download Document File
-router.get("/:documentId/download", DocumentController.downloadDocument);
+router.get("/:documentId/download", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.downloadDocument);
 
 // PUT - Update Document (Admin only)
-router.put("/:documentId", adminAuthMiddleware, upload.single("file"), DocumentController.updateDocument);
+router.put("/:documentId", authenticate, authorizeRoles("admin"), upload.single("file"), DocumentController.updateDocument);
 
 // DELETE - Delete Document (Admin only)
-router.delete("/:documentId", adminAuthMiddleware, DocumentController.deleteDocument);
+router.delete("/:documentId", authenticate, authorizeRoles("admin"), DocumentController.deleteDocument);
 
 export default router;
 

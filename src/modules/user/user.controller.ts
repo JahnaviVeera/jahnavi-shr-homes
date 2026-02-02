@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+﻿import type { Request, Response, NextFunction } from "express";
 const UserServices = require("./user.services");
 
 /**
@@ -39,7 +39,7 @@ const UserServices = require("./user.services");
  *         description: Forbidden - Admin privileges required
  */
 //POST
-exports.createUser = async (req: Request, res: Response) => {
+exports.createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userData = await UserServices.createUser(req.body);
 
@@ -49,10 +49,7 @@ exports.createUser = async (req: Request, res: Response) => {
             data: userData,
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
+        next(error);
     }
 };
 
@@ -90,7 +87,7 @@ exports.createUser = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETBYID
-exports.getuserById = async (req: Request, res: Response) => {
+exports.getuserById = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.params.userId
         const user = await UserServices.getUserById(userId);
@@ -101,10 +98,7 @@ exports.getuserById = async (req: Request, res: Response) => {
             data: user
         })
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        })
+        next(error);
     }
 
 }
@@ -115,12 +109,6 @@ exports.getuserById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all users
  *     tags: [Users]
- *     parameters:
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: Search by userName, email, contact, or companyName
  *     responses:
  *       200:
  *         description: Users fetched successfully
@@ -143,21 +131,17 @@ exports.getuserById = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETALL
-exports.getAllUsers = async (req: Request, res: Response) => {
+exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { search } = req.query;
-        const users = await UserServices.getAllUsers(search as string);
+        const users = await UserServices.getAllUsers();
         return res.status(200).json({
             success: true,
-            message: "Users feched successfully",
+            message: "Users fetched successfully",
             data: users
         })
 
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        })
+        next(error);
     }
 }
 
@@ -219,12 +203,7 @@ exports.getAllUsers = async (req: Request, res: Response) => {
  *                 maxLength: 255
  *                 example: "ABC Construction Ltd"
  *                 description: Company name (optional)
- *               projectIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                   format: uuid
- *                 description: List of project IDs to associate with the user (optional)
+
  *
  *               timezone:
  *                 type: string
@@ -1156,6 +1135,10 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// Analytics methods moved to UserServices
+
+// ... existing code ...
+
 /**
  * @swagger
  * /api/user/leads/stats:
@@ -1168,7 +1151,7 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
  *       200:
  *         description: Stats fetched successfully
  */
-exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
+exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const stats = await UserServices.getCustomerLeadsStats();
         return res.status(200).json({
@@ -1177,10 +1160,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
             data: stats
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -1188,7 +1168,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
  * @swagger
  * /api/user/leads/new:
  *   get:
- *     summary: Get list of new leads (Users with Inprogress projects)
+ *     summary: Get list of new leads (Users with Inprogress or Planning projects)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -1196,7 +1176,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response) => {
  *       200:
  *         description: New leads fetched successfully
  */
-exports.getNewLeads = async (req: Request, res: Response) => {
+exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const leads = await UserServices.getNewLeadsList();
         return res.status(200).json({
@@ -1205,10 +1185,7 @@ exports.getNewLeads = async (req: Request, res: Response) => {
             data: leads
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };
 
@@ -1224,7 +1201,7 @@ exports.getNewLeads = async (req: Request, res: Response) => {
  *       200:
  *         description: Closed customers fetched successfully
  */
-exports.getClosedCustomers = async (req: Request, res: Response) => {
+exports.getClosedCustomers = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const customers = await UserServices.getClosedCustomersList();
         return res.status(200).json({
@@ -1233,9 +1210,6 @@ exports.getClosedCustomers = async (req: Request, res: Response) => {
             data: customers
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error)
-        });
+        next(error);
     }
 };

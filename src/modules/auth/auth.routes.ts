@@ -1,6 +1,8 @@
-﻿const express = require("express");
+﻿import express from "express";
+import * as authController from "./auth.controller";
+import { authenticate } from "../../middleware/auth.middleware";
+
 const router = express.Router();
-const authController = require("./auth.controller");
 
 /**
  * @swagger
@@ -17,6 +19,8 @@ router.post("/user/login", authController.userLogin);
 
 
 router.post("/supervisor/login", authController.supervisorLogin);
+
+router.post("/logout", authenticate, authController.logout);
 
 
 export default router;

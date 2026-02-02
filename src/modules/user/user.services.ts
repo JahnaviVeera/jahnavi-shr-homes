@@ -1,6 +1,7 @@
 ﻿import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
-import { UserRole, SupervisorStatus, Prisma } from "@prisma/client";
+import { UserRole, Prisma } from "@prisma/client";
+import * as projectService from "../project/project.services";
 
 // Create a new user
 export const createUser = async (data: {
@@ -12,17 +13,14 @@ export const createUser = async (data: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
-
-
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
-    projectIds?: string[];
     createdAt: Date;
     updatedAt: Date;
 }) => {
     const existingUser = await prisma.user.findFirst({
-        where: { email: data.email } // or data.userName, adjust as needed
+        where: { email: data.email }
     });
 
     if (existingUser) {
@@ -35,20 +33,7 @@ export const createUser = async (data: {
         hashedPassword = await bcrypt.hash(data.password.trim(), 10);
     }
 
-    // Check if any of the projects are already assigned to another user
-    if (data.projectIds && data.projectIds.length > 0) {
-        const assignedProjects = await prisma.project.findMany({
-            where: {
-                projectId: { in: data.projectIds },
-                members: { some: {} }
-            },
-            select: { projectName: true }
-        });
 
-        if (assignedProjects.length > 0) {
-            throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
-        }
-    }
 
     const userData: Prisma.UserCreateInput = {
         userName: data.userName,
@@ -67,24 +52,17 @@ export const createUser = async (data: {
         updatedAt: new Date(),
     };
 
-    if (data.projectIds && data.projectIds.length > 0) {
-        userData.projects = {
-            connect: data.projectIds.map(projectId => ({ projectId }))
-        };
-    }
-
     const newUser = await prisma.user.create({
         data: userData
     });
 
-    // Return user with password included
     return newUser;
 };
 
 export const getUserById = async (userId: string) => {
 
     if (!userId) {
-        throw new Error("User not exists");
+        throw new Error("User ID required");
     }
 
     const user = await prisma.user.findUnique({
@@ -104,12 +82,6 @@ export const getUserById = async (userId: string) => {
             language: true,
             createdAt: true,
             updatedAt: true,
-            projects: {
-                select: {
-                    projectId: true,
-                    projectName: true
-                }
-            }
         }
     });
 
@@ -117,23 +89,14 @@ export const getUserById = async (userId: string) => {
         throw new Error("User not found");
     }
 
-    return user;
+    // Manual fetch of projects (Decoupled)
+    const projects = await projectService.getProjectsByCustomerId(userId);
+
+    return { ...user, projects };
 }
 
-export const getAllUsers = async (search?: string) => {
-    const whereClause: Prisma.UserWhereInput = {};
-
-    if (search) {
-        whereClause.OR = [
-            { userName: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-            { contact: { contains: search, mode: 'insensitive' } },
-            { companyName: { contains: search, mode: 'insensitive' } }
-        ];
-    }
-
+export const getAllUsers = async () => {
     const users = await prisma.user.findMany({
-        where: whereClause,
         select: {
             userId: true,
             userName: true,
@@ -141,18 +104,34 @@ export const getAllUsers = async (search?: string) => {
             role: true,
             contact: true,
             companyName: true,
-            projects: {
-                select: {
-                    projectId: true,
-                    projectName: true
-                }
-            }
         }
     });
-    if (!users) {
-        return []
+
+    if (!users || users.length === 0) {
+        return [];
     }
-    return users
+
+
+    // Fetch projects for all these users
+    // If we iterate, N+1 problem.
+    // ProjectService doesn't have "getProjectsForCustomerIds".
+    // I can stick to fetching all projects via service?? No, that exposes too much.
+    // Ideally I'd ask ProjectService for a map.
+    // Let's use `projectService.getAllProjectsWithCustomer()`? No.
+    // I will iterate for now or query directly if I MUST.
+    // But the goal is decoupling.
+    // Let's add `getProjectsByCustomerIds` to project.service.
+
+    // For now, I will use a simple iteration (Parallel Promise.all) because N is likely small (users page).
+    // Or better, I will implement `getProjectsByCustomerIds` in project.services.ts later.
+    // Actually, I can use `getProjectsByCustomerId` in a loop.
+
+    const usersWithProjects = await Promise.all(users.map(async (user) => {
+        const projects = await projectService.getProjectsByCustomerId(user.userId);
+        return { ...user, projects };
+    }));
+
+    return usersWithProjects;
 }
 
 export const updateUser = async (userId: string, updatedUserData: {
@@ -164,12 +143,9 @@ export const updateUser = async (userId: string, updatedUserData: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
-
-
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
-    projectIds?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -192,37 +168,12 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
 
-
     // General Settings
     if (updatedUserData.timezone !== undefined) dataToUpdate.timezone = updatedUserData.timezone;
     if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
     if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
 
-    // Project Associations
-    if (updatedUserData.projectIds !== undefined) {
-        // Check if any of the projects are already assigned to another user (excluding current user)
-        if (updatedUserData.projectIds.length > 0) {
-            const assignedProjects = await prisma.project.findMany({
-                where: {
-                    projectId: { in: updatedUserData.projectIds },
-                    members: {
-                        some: {
-                            userId: { not: userId }
-                        }
-                    }
-                },
-                select: { projectName: true }
-            });
 
-            if (assignedProjects.length > 0) {
-                throw new Error(`Project(s) already assigned to another user: ${assignedProjects.map(p => p.projectName).join(", ")}`);
-            }
-        }
-
-        dataToUpdate.projects = {
-            set: updatedUserData.projectIds.map(projectId => ({ projectId }))
-        };
-    }
 
     // Handle password update (hash if provided)
     if (updatedUserData.password !== undefined) {
@@ -238,7 +189,6 @@ export const updateUser = async (userId: string, updatedUserData: {
         data: dataToUpdate,
     });
 
-    // Return user with password included
     return updatedUser;
 }
 
@@ -252,13 +202,6 @@ export const deleteUser = async (userId: string) => {
     const deletedUser = await prisma.user.delete({ where: { userId } });
     return deletedUser;
 }
-
-/**
- * Approve supervisor for a user
- * Updates the supervisor's approve field to "approve"
- * @param userId - The user ID
- */
-
 
 // Change password
 export const changePassword = async (userId: string, currentPassword: string, newPassword: string) => {
@@ -296,27 +239,19 @@ export const changePassword = async (userId: string, currentPassword: string, ne
 
 // Get Customer Leads Stats
 export const getCustomerLeadsStats = async () => {
-    // New Leads: Users with at least one Inprogress project
-    const newLeadsCount = await prisma.user.count({
-        where: {
-            projects: {
-                some: {
-                    initialStatus: 'Inprogress'
-                }
-            }
-        }
-    });
+    // New Leads: Unique customers with at least one Inprogress or Planning project
+    const newLeadsCount = await prisma.project.findMany({
+        where: { initialStatus: { in: ['Inprogress', 'Planning'] } },
+        distinct: ['customerId'],
+        select: { customerId: true }
+    }).then(res => res.length);
 
-    // Closed Customers: Users with at least one complete or Completed project
-    const closedCustomersCount = await prisma.user.count({
-        where: {
-            projects: {
-                some: {
-                    initialStatus: { in: ['complete', 'Completed'] }
-                }
-            }
-        }
-    });
+    // Closed Customers: Unique customers with at least one complete or Completed project
+    const closedCustomersCount = await prisma.project.findMany({
+        where: { initialStatus: { in: ['complete', 'Completed'] } },
+        distinct: ['customerId'],
+        select: { customerId: true }
+    }).then(res => res.length);
 
     return {
         newLeads: newLeadsCount,
@@ -325,43 +260,29 @@ export const getCustomerLeadsStats = async () => {
     };
 };
 
-// Get New Leads List (Users with Inprogress projects)
+// Get New Leads List (Users with Inprogress or Planning projects)
 export const getNewLeadsList = async () => {
     const projects = await prisma.project.findMany({
         where: {
-            initialStatus: 'Inprogress'
+            initialStatus: { in: ['Inprogress', 'Planning'] }
         },
         include: {
-            members: {
-                select: {
-                    userId: true,
-                    userName: true,
-                    contact: true
-                }
-            }
+            customer: true
         },
         orderBy: {
             startDate: 'desc'
         }
     });
 
-    // Flatten the results to match the required table format
-    const flatLeads: any[] = [];
-    projects.forEach(project => {
-        project.members.forEach(member => {
-            flatLeads.push({
-                userId: member.userId,
-                projectId: project.projectId,
-                customerName: member.userName,
-                projectName: project.projectName,
-                mobileNumber: member.contact,
-                projectValue: project.totalBudget,
-                date: project.startDate
-            });
-        });
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
     });
-
-    return flatLeads;
 };
 
 // Get Closed Customers List (Users with complete/Completed projects)
@@ -371,34 +292,20 @@ export const getClosedCustomersList = async () => {
             initialStatus: { in: ['complete', 'Completed'] }
         },
         include: {
-            members: {
-                select: {
-                    userId: true,
-                    userName: true,
-                    contact: true
-                }
-            }
+            customer: true
         },
         orderBy: {
             startDate: 'desc'
         }
     });
 
-    // Flatten the results to match the required table format
-    const flatCustomers: any[] = [];
-    projects.forEach(project => {
-        project.members.forEach(member => {
-            flatCustomers.push({
-                userId: member.userId,
-                projectId: project.projectId,
-                customerName: member.userName,
-                projectName: project.projectName,
-                mobileNumber: member.contact,
-                projectValue: project.totalBudget,
-                date: project.startDate
-            });
-        });
+    // Remove password from customer details
+    return projects.map(project => {
+        const { customer, ...projectDetails } = project;
+        const { password, ...userDetails } = customer;
+        return {
+            ...projectDetails,
+            customer: userDetails
+        };
     });
-
-    return flatCustomers;
 };

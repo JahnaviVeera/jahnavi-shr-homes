@@ -1,7 +1,7 @@
 ﻿const express = require("express");
 const router = express.Router();
 const MaterialController = require("./material.controller");
-const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSupervisorAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -11,25 +11,28 @@ const { adminOrSupervisorAuthMiddleware } = require("../../middleware/adminOrSup
  */
 
 // Get materials by project (must come before /:materialId route)
-router.get("/project/:projectId", MaterialController.getMaterialsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getMaterialsByProject);
 
 // Get total material count by project (must come before /:materialId route)
-router.get("/project/:projectId/total-count", MaterialController.getTotalMaterialCountByProject);
+router.get("/project/:projectId/total-count", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.getTotalMaterialCountByProject);
 
 // Get all materials
-router.get("/", MaterialController.getAllMaterials);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getAllMaterials);
 
-// Create a new material (Admin and Supervisor only - Customers cannot create)
-router.post("/", adminOrSupervisorAuthMiddleware, MaterialController.createMaterial);
+// Create a new material (Admin and Supervisor)
+// Prompt says Admin: "materials usage ... admin should only can create"
+// Prompt says Supervisor: "Material Usage"
+// This implies both need write access.
+router.post("/", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.createMaterial);
 
 // Get material by ID
-router.get("/:materialId", MaterialController.getMaterialById);
+router.get("/:materialId", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getMaterialById);
 
-// Update material (Admin and Supervisor only - Customers cannot update)
-router.put("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.updateMaterial);
+// Update material (Admin and Supervisor)
+router.put("/:materialId", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.updateMaterial);
 
-// Delete material (Admin and Supervisor only - Customers cannot delete)
-router.delete("/:materialId", adminOrSupervisorAuthMiddleware, MaterialController.deleteMaterial);
+// Delete material (Admin and Supervisor)
+router.delete("/:materialId", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.deleteMaterial);
 
 export default router;
 

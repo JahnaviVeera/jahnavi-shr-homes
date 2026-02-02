@@ -8,7 +8,23 @@ export const createMaterial = async (data: {
     date: Date | string;
     notes?: string | null;
     vendor?: string | null;
-}) => {
+}, supervisorId?: string) => {
+    // Validate project existence and assignment if supervisorId is provided
+    const project = await prisma.project.findUnique({
+        where: { projectId: data.projectId },
+        select: { supervisorId: true }
+    });
+
+    if (!project) {
+        throw new Error("Project not found");
+    }
+
+    if (supervisorId) {
+        if (project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project and cannot post materials for it.");
+        }
+    }
+
     // Ensure date is a valid Date object
     const parsedDate = new Date(data.date);
     if (isNaN(parsedDate.getTime())) {
@@ -32,7 +48,7 @@ export const createMaterial = async (data: {
 };
 
 // Get material by ID
-export const getMaterialById = async (materialId: string) => {
+export const getMaterialById = async (materialId: string, supervisorId?: string) => {
     if (!materialId) {
         throw new Error("Material ID is required");
     }
@@ -46,20 +62,45 @@ export const getMaterialById = async (materialId: string) => {
         throw new Error("Material not found");
     }
 
+    // Check assignment
+    if (supervisorId) {
+        if (material.project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to the project this material belongs to.");
+        }
+    }
+
+
     return material;
 };
 
 // Get all materials
-export const getAllMaterials = async (search?: string) => {
+export const getAllMaterials = async (search?: string, supervisorId?: string) => {
     const where: any = {};
 
+    if (supervisorId) {
+        where.project = {
+            supervisorId: supervisorId
+        };
+    }
+
     if (search) {
-        where.OR = [
+        const searchFilter = [
             { materialName: { contains: search, mode: 'insensitive' } },
             { notes: { contains: search, mode: 'insensitive' } },
             { vendor: { contains: search, mode: 'insensitive' } },
             { project: { projectName: { contains: search, mode: 'insensitive' } } }
         ];
+
+        if (where.project) {
+            // Combine with existing project filter
+            where.AND = [
+                { project: where.project },
+                { OR: searchFilter }
+            ];
+            delete where.project;
+        } else {
+            where.OR = searchFilter;
+        }
     }
 
     const materials = await prisma.material.findMany({
@@ -75,9 +116,25 @@ export const getAllMaterials = async (search?: string) => {
 };
 
 // Get materials by project ID
-export const getMaterialsByProject = async (projectId: string) => {
+export const getMaterialsByProject = async (projectId: string, supervisorId?: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
+    }
+
+    // Check assignment
+    if (supervisorId) {
+        const project = await prisma.project.findUnique({
+            where: { projectId },
+            select: { supervisorId: true }
+        });
+
+        if (!project) {
+            throw new Error("Project not found");
+        }
+
+        if (project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project.");
+        }
     }
 
     const materials = await prisma.material.findMany({
@@ -92,9 +149,25 @@ export const getMaterialsByProject = async (projectId: string) => {
 
 
 // Get total material count by project
-export const getTotalMaterialCountByProject = async (projectId: string) => {
+export const getTotalMaterialCountByProject = async (projectId: string, supervisorId?: string) => {
     if (!projectId) {
         throw new Error("Project ID is required");
+    }
+
+    // Check assignment
+    if (supervisorId) {
+        const project = await prisma.project.findUnique({
+            where: { projectId },
+            select: { supervisorId: true }
+        });
+
+        if (!project) {
+            throw new Error("Project not found");
+        }
+
+        if (project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project.");
+        }
     }
 
     const count = await prisma.material.count({
@@ -115,13 +188,37 @@ export const updateMaterial = async (materialId: string, updateData: {
     notes?: string | null;
     vendor?: string | null;
     projectId?: string;
-}) => {
+}, supervisorId?: string) => {
     const material = await prisma.material.findUnique({
-        where: { materialId }
+        where: { materialId },
+        include: { project: true }
     });
 
     if (!material) {
         throw new Error("Material not found");
+    }
+
+    // Check assignment for the original project
+    if (supervisorId) {
+        if (material.project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project and cannot update its materials.");
+        }
+
+        // If shifting material to another project, check that project too
+        if (updateData.projectId && updateData.projectId !== material.projectId) {
+            const newProject = await prisma.project.findUnique({
+                where: { projectId: updateData.projectId },
+                select: { supervisorId: true }
+            });
+
+            if (!newProject) {
+                throw new Error("Target project not found");
+            }
+
+            if (newProject.supervisorId !== supervisorId) {
+                throw new Error("Unauthorized: You are not assigned to the target project and cannot move materials into it.");
+            }
+        }
     }
 
     const dataToUpdate: any = {
@@ -164,13 +261,21 @@ export const updateMaterial = async (materialId: string, updateData: {
 };
 
 // Delete material
-export const deleteMaterial = async (materialId: string) => {
+export const deleteMaterial = async (materialId: string, supervisorId?: string) => {
     const material = await prisma.material.findUnique({
-        where: { materialId }
+        where: { materialId },
+        include: { project: true }
     });
 
     if (!material) {
         throw new Error("Material not found");
+    }
+
+    // Check assignment
+    if (supervisorId) {
+        if (material.project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project and cannot delete its materials.");
+        }
     }
 
     await prisma.material.delete({

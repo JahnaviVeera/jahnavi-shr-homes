@@ -441,6 +441,8 @@ exports.deleteExpense = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get expense summary for all projects
  *     tags: [Expenses]
+ *     security:
+ *       - bearerAuth: []
  *     description: Returns expense details for all projects including project name, total expense, and expenses per month
  *     responses:
  *       200:
@@ -514,6 +516,8 @@ exports.getExpenseSummaryAllProjects = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get expense summary for a specific project
  *     tags: [Expenses]
+ *     security:
+ *       - bearerAuth: []
  *     description: Returns project details along with total expenses and expenses per month for the specified project
  *     parameters:
  *       - in: path

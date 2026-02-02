@@ -2,7 +2,7 @@
 const router = express.Router();
 
 const projectController = require("./project.controller");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
 /**
  * @swagger
@@ -12,19 +12,19 @@ const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware")
  */
 
 
-router.post("/createproject", adminAuthMiddleware, projectController.createProject);
+router.post("/createproject", authenticate, authorizeRoles("admin"), projectController.createProject);
 
 
-router.put("/updateproject/:projectId", adminAuthMiddleware, projectController.updateProject);
+router.put("/updateproject/:projectId", authenticate, authorizeRoles("admin"), projectController.updateProject);
 
 
-router.delete("/deleteproject/:projectId", adminAuthMiddleware, projectController.deleteProject);
+router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin"), projectController.deleteProject);
 
 
-router.get("/getproject/:projectId", projectController.getProjectById);
+router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), projectController.getProjectById);
 
 
-router.get("/getallprojects", projectController.getAllProjects);
+router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "user"), projectController.getAllProjects);
 
 export default router;
 
