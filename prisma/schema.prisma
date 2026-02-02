@@ -13,7 +13,7 @@ datasource db {
 
 enum UserRole {
   admin
-  user
+  customer
   supervisor
 
   @@map("users_role_enum")

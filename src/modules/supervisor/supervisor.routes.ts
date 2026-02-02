@@ -14,7 +14,7 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 // Get all supervisors (Admin only can list all, but maybe user needs to see them? Assuming admin/user for now but let's stick to admin/public based on previous logic but restricting more safely)
 // Actually, let's keep list open or restricted? Prompt said "Admin should only can create".
 // Let's restrict list to Authenticated Users (Admin, User, Supervisor)
-router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), SupervisorController.getAllSupervisors);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer"), SupervisorController.getAllSupervisors);
 
 // Create a new supervisor (Admin only)
 router.post("/", authenticate, authorizeRoles("admin"), SupervisorController.createSupervisor);
@@ -138,7 +138,7 @@ router.get("/:supervisorId/assigned-projects-count", authenticate, authorizeRole
 router.get("/:supervisorId/assigned-projects", authenticate, authorizeRoles("supervisor"), SupervisorController.getAssignedProjects);
 
 // Get supervisor by ID
-router.get("/:supervisorId", authenticate, authorizeRoles("admin", "supervisor", "user"), SupervisorController.getSupervisorById);
+router.get("/:supervisorId", authenticate, authorizeRoles("admin", "supervisor", "customer"), SupervisorController.getSupervisorById);
 
 // Update supervisor (Admin only)
 router.put("/:supervisorId", authenticate, authorizeRoles("admin"), SupervisorController.updateSupervisor);

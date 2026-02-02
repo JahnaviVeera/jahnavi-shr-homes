@@ -23,10 +23,10 @@ router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), Q
 // ============================================
 
 // Get total amount of a specific quotation (Authenticated)
-router.get("/:quotationId/total-amount", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationTotalAmount);
+router.get("/:quotationId/total-amount", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationTotalAmount);
 
 // Download quotation file (Authenticated)
-router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.downloadQuotation);
+router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.downloadQuotation);
 
 
 // Get all quotations (Admin, Supervisor, maybe User?)
@@ -34,25 +34,25 @@ router.get("/", authenticate, authorizeRoles("admin", "supervisor"), QuotationCo
 
 
 // Get pending quotations (must be before /:quotationId route)
-router.get("/pending", authenticate, authorizeRoles("admin", "user"), QuotationController.getPendingQuotations);
+router.get("/pending", authenticate, authorizeRoles("admin", "customer"), QuotationController.getPendingQuotations);
 
 // Get quotations by status (must be before /:quotationId route)
-router.get("/status/:status", authenticate, authorizeRoles("admin", "user"), QuotationController.getQuotationsByStatus);
+router.get("/status/:status", authenticate, authorizeRoles("admin", "customer"), QuotationController.getQuotationsByStatus);
 
 // Get quotations by project (must be before /:quotationId route)
-router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationsByProject);
 
 // Get quotations by user (must be before /:quotationId route)
-router.get("/user/:userId", authenticate, authorizeRoles("admin", "user"), QuotationController.getQuotationsByUserId);
+router.get("/user/:userId", authenticate, authorizeRoles("admin", "customer"), QuotationController.getQuotationsByUserId);
 
 // Approve quotation (User only)
-router.post("/:quotationId/approve", authenticate, authorizeRoles("user"), QuotationController.approveQuotation);
+router.post("/:quotationId/approve", authenticate, authorizeRoles("customer"), QuotationController.approveQuotation);
 
 // Reject quotation (User only)
-router.post("/:quotationId/reject", authenticate, authorizeRoles("user"), QuotationController.rejectQuotation);
+router.post("/:quotationId/reject", authenticate, authorizeRoles("customer"), QuotationController.rejectQuotation);
 
 // Get quotation by ID
-router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "user"), QuotationController.getQuotationById);
+router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationById);
 
 // Update quotation (Admin only)
 router.put("/:quotationId", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.updateQuotation);

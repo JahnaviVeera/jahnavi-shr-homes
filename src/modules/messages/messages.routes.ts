@@ -12,7 +12,7 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 
 // Apply auth middleware to all routes
 // Only customers and supervisors can access messages
-router.use(authenticate, authorizeRoles("user", "supervisor"));
+router.use(authenticate, authorizeRoles("customer", "supervisor"));
 
 // POST - Send a message
 router.post("/", MessagesController.sendMessage);

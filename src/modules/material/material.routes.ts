@@ -11,13 +11,13 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  */
 
 // Get materials by project (must come before /:materialId route)
-router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getMaterialsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), MaterialController.getMaterialsByProject);
 
 // Get total material count by project (must come before /:materialId route)
 router.get("/project/:projectId/total-count", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.getTotalMaterialCountByProject);
 
 // Get all materials
-router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getAllMaterials);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer"), MaterialController.getAllMaterials);
 
 // Create a new material (Admin and Supervisor)
 // Prompt says Admin: "materials usage ... admin should only can create"
@@ -26,7 +26,7 @@ router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), Mat
 router.post("/", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.createMaterial);
 
 // Get material by ID
-router.get("/:materialId", authenticate, authorizeRoles("admin", "supervisor", "user"), MaterialController.getMaterialById);
+router.get("/:materialId", authenticate, authorizeRoles("admin", "supervisor", "customer"), MaterialController.getMaterialById);
 
 // Update material (Admin and Supervisor)
 router.put("/:materialId", authenticate, authorizeRoles("admin", "supervisor"), MaterialController.updateMaterial);

@@ -21,10 +21,10 @@ router.put("/updateproject/:projectId", authenticate, authorizeRoles("admin"), p
 router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin"), projectController.deleteProject);
 
 
-router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "user"), projectController.getProjectById);
+router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getProjectById);
 
 
-router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "user"), projectController.getAllProjects);
+router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
 
 export default router;
 

@@ -49,8 +49,8 @@ export const generateUserToken = (userId: string, email: string, role: string): 
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
-    if (role !== "user" && role !== "supervisor") {
-        throw new Error("Invalid role. Must be 'user' or 'supervisor'");
+    if (role !== "customer" && role !== "supervisor") {
+        throw new Error("Invalid role. Must be 'customer' or 'supervisor'");
     }
 
     const payload: TokenPayload = {

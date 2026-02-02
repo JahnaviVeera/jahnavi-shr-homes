@@ -15,7 +15,7 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), DocumentController.createDocument);
 
 // GET - Get All Documents (with optional filters: ?documentType=Agreement&projectId=uuid)
-router.get("/", authenticate, authorizeRoles("admin", "user"), DocumentController.getAllDocuments);
+router.get("/", authenticate, authorizeRoles("admin", "customer"), DocumentController.getAllDocuments);
 
 // // GET - Get Document Counts by Type
 // router.get("/counts/by-type", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentCountsByType);
@@ -25,13 +25,13 @@ router.get("/", authenticate, authorizeRoles("admin", "user"), DocumentControlle
 // router.get("/type/:documentType", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentsByType);
 
 // GET - Get Documents by Project ID
-router.get("/project/:projectId", authenticate, authorizeRoles("admin", "user"), DocumentController.getDocumentsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "customer"), DocumentController.getDocumentsByProject);
 
 // GET - Get Document by ID
-router.get("/:documentId", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.getDocumentById);
+router.get("/:documentId", authenticate, authorizeRoles("admin", "supervisor", "customer"), DocumentController.getDocumentById);
 
 // GET - Download Document File
-router.get("/:documentId/download", authenticate, authorizeRoles("admin", "supervisor", "user"), DocumentController.downloadDocument);
+router.get("/:documentId/download", authenticate, authorizeRoles("admin", "supervisor", "customer"), DocumentController.downloadDocument);
 
 // PUT - Update Document (Admin only)
 router.put("/:documentId", authenticate, authorizeRoles("admin"), upload.single("file"), DocumentController.updateDocument);

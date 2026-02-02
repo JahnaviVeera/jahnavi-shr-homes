@@ -12,22 +12,22 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  */
 
 // Get daily updates by status for user (Authenticated Customer) - Must come before /:dailyUpdateId
-router.get("/user/status/:status", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesByStatusForUser);
+router.get("/user/status/:status", authenticate, authorizeRoles("customer"), DailyUpdatesController.getDailyUpdatesByStatusForUser);
 
 // Get all daily updates for a user (Authenticated Customer)
-router.get("/user/updates", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesForUser);
+router.get("/user/updates", authenticate, authorizeRoles("customer"), DailyUpdatesController.getDailyUpdatesForUser);
 
 // Get all daily updates
-router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getAllDailyUpdates);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getAllDailyUpdates);
 
 // Get pending daily updates
-router.get("/pending", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getPendingDailyUpdates);
+router.get("/pending", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getPendingDailyUpdates);
 
 // Get approved daily updates
-router.get("/approved", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getApprovedDailyUpdates);
+router.get("/approved", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getApprovedDailyUpdates);
 
 // Get rejected daily updates
-router.get("/rejected", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getRejectedDailyUpdates);
+router.get("/rejected", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getRejectedDailyUpdates);
 
 // Get daily updates for assigned projects (Authenticated Supervisor) - Must come before /:dailyUpdateId
 router.get("/supervisor/assigned-projects", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.getDailyUpdatesForSupervisor);
@@ -37,7 +37,7 @@ router.get("/supervisor/assigned-projects", authenticate, authorizeRoles("superv
 router.get("/supervisor/stats", authenticate, authorizeRoles("admin", "supervisor"), DailyUpdatesController.getSupervisorStats);
 
 // Get construction timeline for a project (Admin or Supervisor)
-router.get("/project/:projectId/timeline", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getConstructionTimeline);
+router.get("/project/:projectId/timeline", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getConstructionTimeline);
 
 // Create a new daily update (Supervisor only)
 // Matches POST /api/daily-updates
@@ -46,19 +46,19 @@ router.post("/", authenticate, authorizeRoles("supervisor"), upload.fields([{ na
 
 // Download daily update image
 // Must come before /:dailyUpdateId if using regex, but here it's fine as "image" is literal
-router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.downloadImage);
+router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.downloadImage);
 
 // Download daily update video
-router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.downloadVideo);
+router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.downloadVideo);
 
 // Approve daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("user"), DailyUpdatesController.approveDailyUpdate);
+router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("customer"), DailyUpdatesController.approveDailyUpdate);
 
 // Reject daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("user"), DailyUpdatesController.rejectDailyUpdate);
+router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("customer"), DailyUpdatesController.rejectDailyUpdate);
 
 // Get daily update by ID (General access, maybe restricted later?)
-router.get("/:dailyUpdateId", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getDailyUpdateById);
+router.get("/:dailyUpdateId", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getDailyUpdateById);
 
 // Update daily update (Supervisor only)
 // Matches PUT /api/daily-updates/:dailyUpdateId
