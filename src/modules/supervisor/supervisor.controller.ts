@@ -184,6 +184,8 @@ exports.createSupervisor = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get a supervisor by ID
  *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: supervisorId
@@ -231,6 +233,8 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all supervisors
  *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: search
@@ -562,6 +566,8 @@ exports.removeProjectFromSupervisor = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get assigned projects count for a supervisor
  *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: supervisorId
@@ -616,76 +622,6 @@ exports.getAssignedProjectsCount = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * @swagger
- * /api/supervisor/{supervisorId}/assigned-projects:
- *   get:
- *     summary: Get all assigned projects for a specific supervisor
- *     tags: [Supervisors]
- *     parameters:
- *       - in: path
- *         name: supervisorId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: The supervisor ID
- *     responses:
- *       200:
- *         description: Assigned projects fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/SuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: object
- *                       properties:
- *                         supervisorId:
- *                           type: string
- *                           format: uuid
- *                         supervisorName:
- *                           type: string
- *                         supervisorEmail:
- *                           type: string
- *                         assignedProjectsCount:
- *                           type: integer
- *                         projects:
- *                           type: array
- *                           items:
- *                             type: object
- *                             properties:
- *                               projectId:
- *                                 type: string
- *                                 format: uuid
- *                               projectName:
- *                                 type: string
- *                               projectType:
- *                                 type: string
- *                               location:
- *                                 type: string
- *                               initialStatus:
- *                                 type: string
- *                               startDate:
- *                                 type: string
- *                                 format: date
- *                               expectedCompletion:
- *                                 type: string
- *                                 format: date
- *                               totalBudget:
- *                                 type: number
- *                               user:
- *                                 type: object
- *                                 properties:
- *                                   userName:
- *                                     type: string
- *                                   email:
- *                                     type: string
- *       400:
- *         description: Bad request - Supervisor not found
- */
 exports.getAssignedProjects = async (req: Request, res: Response) => {
     try {
         const { supervisorId } = req.params;
@@ -703,29 +639,7 @@ exports.getAssignedProjects = async (req: Request, res: Response) => {
         });
     }
 };
-/**
- * @swagger
- * /api/supervisor/my-projects:
- *   get:
- *     summary: Get projects assigned to the logged-in supervisor
- *     tags: [Supervisors]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Assigned projects fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/SuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         $ref: '#/components/schemas/Project'
- */
+
 exports.getMyAssignedProjects = async (req: AuthenticatedRequest, res: Response) => {
     try {
         if (!req.user || req.user.role !== 'supervisor') {

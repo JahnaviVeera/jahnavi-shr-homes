@@ -17,6 +17,9 @@ router.use(authenticate, authorizeRoles("user", "supervisor"));
 // POST - Send a message
 router.post("/", MessagesController.sendMessage);
 
+// POST - Reply to a message
+router.post("/:messageId/reply", MessagesController.replyToMessage);
+
 // GET - Get my messages
 router.get("/", MessagesController.getMyMessages);
 

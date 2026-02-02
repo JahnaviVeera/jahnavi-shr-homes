@@ -1,12 +1,6 @@
 import type { Request, Response } from "express";
 import * as DailyUpdatesServices from "./daily-updates.services";
-
-interface MulterRequest extends Omit<Request, "file" | "files"> {
-    file?: Express.Multer.File;
-    files?: {
-        [fieldname: string]: Express.Multer.File[];
-    } | Express.Multer.File[];
-}
+import * as supervisorService from "../supervisor/supervisor.services";
 
 interface RequestWithUser extends Request {
     user?: {
@@ -14,6 +8,13 @@ interface RequestWithUser extends Request {
         email: string;
         role: string;
     }
+}
+
+interface MulterRequest extends Omit<RequestWithUser, "file" | "files"> {
+    file?: Express.Multer.File;
+    files?: {
+        [fieldname: string]: Express.Multer.File[];
+    } | Express.Multer.File[];
 }
 
 /**
@@ -56,6 +57,11 @@ interface RequestWithUser extends Request {
  *                 type: string
  *                 format: binary
  *                 description: Optional video file
+ *               status:
+ *                 type: string
+ *                 enum: ["pending", "approved", "rejected"]
+ *                 example: "pending"
+ *                 description: Optional status of the daily update (defaults to pending)
  *     responses:
  *       201:
  *         description: Daily update created successfully
@@ -90,15 +96,24 @@ export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
             }
         }
 
+        // Get supervisor status to verify assignment
+        let supervisorId: string | undefined = undefined;
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
         const dailyUpdateData = await DailyUpdatesServices.createDailyUpdate(
             {
                 constructionStage: req.body.constructionStage,
                 description: req.body.description || null,
                 projectId: req.body.projectId || null,
                 rawMaterials: rawMaterials,
+                status: req.body.status,
             },
             image,
-            video
+            video,
+            supervisorId
         );
 
         return res.status(201).json({
@@ -157,13 +172,28 @@ export const getDailyUpdateById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all daily updates
  *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Daily updates fetched successfully
  */
-export const getAllDailyUpdates = async (req: Request, res: Response) => {
+export const getAllDailyUpdates = async (req: RequestWithUser, res: Response) => {
     try {
-        const dailyUpdates = await DailyUpdatesServices.getAllDailyUpdates();
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to filter visibility
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+        // If user is a regular customer (role 'user'), they only see their projects
+        else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+
+        const dailyUpdates = await DailyUpdatesServices.getAllDailyUpdates(supervisorId, customerId);
 
         return res.status(200).json({
             success: true,
@@ -219,10 +249,8 @@ export const getDailyUpdatesForSupervisor = async (req: RequestWithUser, res: Re
             return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
         }
 
-        const supervisorId = req.user.userId;
-        if (!supervisorId) {
-            return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
-        }
+        const user = await supervisorService.getSupervisorByUserId(req.user.userId);
+        const supervisorId = user.supervisorId;
 
         const projects = await DailyUpdatesServices.getDailyUpdatesForSupervisor(supervisorId);
 
@@ -570,6 +598,126 @@ export const getDailyUpdatesForUser = async (req: RequestWithUser, res: Response
 
 /**
  * @swagger
+ * /api/daily-updates/pending:
+ *   get:
+ *     summary: Get all pending daily updates for the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Pending daily updates fetched successfully
+ */
+export const getPendingDailyUpdates = async (req: RequestWithUser, res: Response) => {
+    try {
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        } else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+
+        const data = await DailyUpdatesServices.getDailyUpdatesByStatus('pending', supervisorId, customerId);
+
+        return res.status(200).json({
+            success: true,
+            status: 'pending',
+            count: data.count,
+            data: data.updates
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/approved:
+ *   get:
+ *     summary: Get all approved daily updates for the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Approved daily updates fetched successfully
+ */
+export const getApprovedDailyUpdates = async (req: RequestWithUser, res: Response) => {
+    try {
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        } else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+
+        const data = await DailyUpdatesServices.getDailyUpdatesByStatus('approved', supervisorId, customerId);
+
+        return res.status(200).json({
+            success: true,
+            status: 'approved',
+            count: data.count,
+            data: data.updates
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/rejected:
+ *   get:
+ *     summary: Get all rejected daily updates for the logged-in user
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Rejected daily updates fetched successfully
+ */
+export const getRejectedDailyUpdates = async (req: RequestWithUser, res: Response) => {
+    try {
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        } else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+
+        const data = await DailyUpdatesServices.getDailyUpdatesByStatus('rejected', supervisorId, customerId);
+
+        return res.status(200).json({
+            success: true,
+            status: 'rejected',
+            count: data.count,
+            data: data.updates
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/daily-updates/{dailyUpdateId}/approve:
  *   put:
  *     summary: Approve a daily update (Customer)
@@ -715,7 +863,8 @@ export const getConstructionTimeline = async (req: RequestWithUser, res: Respons
 
         // If user is supervisor, pass supervisorId to service for verification
         if (user.role === 'supervisor') {
-            supervisorId = user.userId;
+            const supervisor = await supervisorService.getSupervisorByUserId(user.userId);
+            supervisorId = supervisor.supervisorId;
         }
 
         const timeline = await DailyUpdatesServices.getConstructionTimeline(projectId, supervisorId);
@@ -783,14 +932,20 @@ export const getConstructionTimeline = async (req: RequestWithUser, res: Respons
  */
 export const getSupervisorStats = async (req: RequestWithUser, res: Response) => {
     try {
-        // Attempt to get supervisorId from query, then from token (if authenticated)
-        const supervisorId = (req.query.supervisorId as string) || (req.user ? req.user.userId : undefined);
+        const supervisorIdFromQuery = req.query.supervisorId as string;
+        let finalSupervisorId = supervisorIdFromQuery;
 
-        if (!supervisorId) {
+        // If supervisorId was not in query but user is a supervisor, get their supervisorId
+        if (!finalSupervisorId && req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            finalSupervisorId = supervisor.supervisorId;
+        }
+
+        if (!finalSupervisorId) {
             return res.status(400).json({ success: false, message: "Supervisor ID is required" });
         }
 
-        const stats = await DailyUpdatesServices.getSupervisorStats(supervisorId);
+        const stats = await DailyUpdatesServices.getSupervisorStats(finalSupervisorId);
 
         return res.status(200).json({
             success: true,

@@ -1,9 +1,32 @@
 ﻿import prisma from "../../config/prisma.client";
 import { PaymentMethod, PaymentStatus, PaymentType, Prisma } from "@prisma/client";
-import { notifyAdmins } from "../notifications/notifications.services";
+import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import { fileUploadService } from "../../services/fileUpload.service";
 import SocketService from "../../services/socket.service";
 import * as projectService from "../project/project.services";
+
+// Helper to normalize PaymentType
+const normalizePaymentType = (type?: string): PaymentType => {
+    if (!type) return PaymentType.Standard;
+    const lower = type.toLowerCase();
+    if (lower === 'multimode') return PaymentType.MultiMode;
+    return PaymentType.Standard;
+};
+
+// Helper to normalize PaymentMethod
+const normalizePaymentMethod = (method?: string): PaymentMethod => {
+    if (!method) return PaymentMethod.cash;
+    const lower = method.toLowerCase();
+    switch (lower) {
+        case 'cash': return PaymentMethod.cash;
+        case 'card': return PaymentMethod.card;
+        case 'bank_transfer': return PaymentMethod.bank_transfer;
+        case 'cheque': return PaymentMethod.cheque;
+        case 'online': return PaymentMethod.online;
+        case 'upi': return PaymentMethod.UPI;
+        default: return PaymentMethod.cash;
+    }
+};
 
 export const createPayment = async (data: {
     amount: number,
@@ -29,8 +52,12 @@ export const createPayment = async (data: {
         }
     }
 
+    // Normalize Inputs
+    const pType = normalizePaymentType(data.paymentType);
+    const pMethod = normalizePaymentMethod(data.paymentMethod);
+
     // Validate MultiMode payment
-    if (data.paymentType === PaymentType.MultiMode) {
+    if (pType === PaymentType.MultiMode) {
         if (!parsedBreakup || !Array.isArray(parsedBreakup) || parsedBreakup.length === 0) {
             throw new Error("Payment breakup is required for MultiMode payments");
         }
@@ -72,8 +99,8 @@ export const createPayment = async (data: {
             amount: data.amount,
             projectId: data.projectId,
             paymentStatus: data.paymentStatus as PaymentStatus,
-            paymentType: (data.paymentType as PaymentType) || PaymentType.Standard,
-            paymentMethod: (data.paymentMethod && data.paymentMethod !== "" ? data.paymentMethod : PaymentMethod.cash) as PaymentMethod,
+            paymentType: pType,
+            paymentMethod: pMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
             paymentDate: new Date(data.paymentDate),
             remarks: data.remarks || null,
@@ -107,6 +134,7 @@ export const createPayment = async (data: {
             message: `Payment of ${data.amount} received for your project ${project.projectName}`,
             paymentId: newPayment.paymentId
         });
+        await notifyUser(project.customer.userId, `Payment of ${data.amount} received for your project ${project.projectName}`, "payment_received");
     }
 
     return newPayment;
@@ -142,8 +170,11 @@ export const updatePayment = async (paymentId: string, updateData: {
         project = await projectService.getProjectById(payment.projectId);
     }
 
+    // Normalize update inputs if provided
+    const pType = updateData.paymentType !== undefined ? normalizePaymentType(updateData.paymentType) : payment.paymentType;
+
     // Validate logic using `payment`
-    const isMultiMode = updateData.paymentType === PaymentType.MultiMode || (updateData.paymentType === undefined && payment.paymentType === PaymentType.MultiMode);
+    const isMultiMode = pType === PaymentType.MultiMode;
 
     // Parse breakup if provided as string
     let parsedBreakup = updateData.paymentBreakup;
@@ -176,7 +207,7 @@ export const updatePayment = async (paymentId: string, updateData: {
 
         if (!breakup || !Array.isArray(breakup) || breakup.length === 0) {
             // Only throw if switching to MultiMode without providing breakup, or if existing breakup is empty
-            if (updateData.paymentType === PaymentType.MultiMode) {
+            if (pType === PaymentType.MultiMode) {
                 throw new Error("Payment breakup is required for MultiMode payments");
             }
         } else {
@@ -199,8 +230,8 @@ export const updatePayment = async (paymentId: string, updateData: {
         dataToUpdate.project = { connect: { projectId: updateData.projectId } };
     }
     if (updateData.paymentStatus !== undefined) dataToUpdate.paymentStatus = updateData.paymentStatus as PaymentStatus;
-    if (updateData.paymentType !== undefined) dataToUpdate.paymentType = updateData.paymentType as PaymentType;
-    if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = updateData.paymentMethod as PaymentMethod;
+    if (updateData.paymentType !== undefined) dataToUpdate.paymentType = pType;
+    if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = normalizePaymentMethod(updateData.paymentMethod);
     if (parsedBreakup !== undefined) dataToUpdate.paymentBreakup = JSON.stringify(parsedBreakup);
     if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate);
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
@@ -242,6 +273,7 @@ export const updatePayment = async (paymentId: string, updateData: {
             message: `Payment updated for project ${notifyProject.projectName}`,
             paymentId: updatedPayment.paymentId
         });
+        await notifyUser(notifyProject.customer.userId, `Payment updated for project ${notifyProject.projectName}`, "payment_updated");
     }
 
     return updatedPayment;
@@ -260,14 +292,81 @@ export const deletePayment = async (paymentId: string) => {
     return { success: true, message: "Payment deleted successfully" };
 };
 
+export const getAllThePayments = async (search?: string, supervisorId?: string, customerId?: string) => {
+    const where: Prisma.PaymentWhereInput = {};
+
+    // 1. Search condition
+    if (search) {
+        where.OR = [
+            { remarks: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { project: { projectName: { contains: search, mode: Prisma.QueryMode.insensitive } } }
+        ];
+    }
+
+    // 2. Role-based isolation
+    if (supervisorId) {
+        where.project = {
+            ...(where.project as any || {}),
+            supervisorId: supervisorId
+        };
+    } else if (customerId) {
+        where.project = {
+            ...(where.project as any || {}),
+            customerId: customerId
+        };
+    }
+
+    const payments = await prisma.payment.findMany({
+        where: where,
+        orderBy: { createdAt: "desc" },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    projectId: true
+                }
+            }
+        }
+    });
+
+    return payments;
+};
+
+export const getPaymentByPaymentId = async (paymentId: string) => {
+    if (!paymentId) {
+        throw new Error("Payment ID is required");
+    }
+
+    const payment = await prisma.payment.findUnique({
+        where: { paymentId },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    projectId: true
+                }
+            }
+        }
+    });
+
+    if (!payment) {
+        throw new Error("Payment not found");
+    }
+
+    return payment;
+};
+
 
 /**
- * Get budget summary across all projects
+ * Get budget summary, supports filtering by role
  * Calculates: Total Budget, Payment Received, Payment Pending
  */
-export const getBudgetSummary = async () => {
-    // Get all projects with their budgets (Decoupled)
-    const projects = await projectService.getAllProjectsBudgets();
+export const getBudgetSummary = async (supervisorId?: string, customerId?: string) => {
+    // Get all relevant projects with their budgets (Decoupled)
+    const projects = await projectService.getAllProjectsBudgets(supervisorId, customerId);
+
+    // Get project IDs for filtering payments
+    const projectIds = projects.map(p => p.projectId);
 
     // Get all completed payments grouped by project
     const paymentsByProject = await prisma.payment.groupBy({
@@ -277,7 +376,10 @@ export const getBudgetSummary = async () => {
         },
         where: {
             paymentStatus: PaymentStatus.completed,
-            projectId: { not: null } // Ensure projectId is not null
+            projectId: {
+                in: projectIds, // Filter payments by the projects the user has access to
+                not: null
+            }
         }
     });
 

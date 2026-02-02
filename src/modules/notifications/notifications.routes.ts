@@ -11,7 +11,7 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  */
 
 // Apply user authentication to all routes
-router.use(authenticate, authorizeRoles("user"));
+router.use(authenticate, authorizeRoles("admin", "supervisor", "user"));
 
 // Get all notifications (with optional filter ?unreadOnly=true)
 router.get("/", NotificationsController.getNotifications);

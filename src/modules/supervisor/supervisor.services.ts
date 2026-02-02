@@ -33,6 +33,7 @@ export const createSupervisor = async (data: {
     if (!data.password || data.password.trim() === "") {
         throw new Error("Password is required for supervisor");
     }
+
     const hashedPassword = await bcrypt.hash(data.password.trim(), 10);
 
     // Create user account for authentication
@@ -115,6 +116,27 @@ export const getSupervisorById = async (supervisorId: string) => {
         assignedProjectsCount: projects.length,
         projects: projects
     };
+};
+
+/**
+ * Get supervisor by User ID
+ * @param userId - The ID of the user record
+ * @returns Supervisor record
+ */
+export const getSupervisorByUserId = async (userId: string) => {
+    if (!userId) {
+        throw new Error("User ID is required");
+    }
+
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { userId }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor record not found for this user");
+    }
+
+    return supervisor;
 };
 
 export const getSupervisorProfile = async (supervisorId: string) => {

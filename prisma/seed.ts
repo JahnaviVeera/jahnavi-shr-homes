@@ -132,6 +132,7 @@ async function main() {
                     data: {
                         fullName: s.name,
                         phoneNumber: s.phone,
+                        password: hashedPassword,
                         status: SupervisorStatus.Active,
                         projects: {
                             connect: [

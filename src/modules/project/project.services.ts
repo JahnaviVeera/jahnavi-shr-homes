@@ -318,8 +318,17 @@ export const getProjectsBySupervisorId = async (supervisorId: string) => {
  * Get all projects with budget
  * @returns List of projects with IDs and budgets
  */
-export const getAllProjectsBudgets = async () => {
+/**
+ * Get all projects with budget, supports filtering by role
+ * @returns List of projects with IDs and budgets
+ */
+export const getAllProjectsBudgets = async (supervisorId?: string, customerId?: string) => {
+    const where: Prisma.ProjectWhereInput = {};
+    if (supervisorId) where.supervisorId = supervisorId;
+    if (customerId) where.customerId = customerId;
+
     return prisma.project.findMany({
+        where,
         select: {
             projectId: true,
             totalBudget: true

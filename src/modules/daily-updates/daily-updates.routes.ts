@@ -11,7 +11,6 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  *     description: Daily construction updates management endpoints
  */
 
-
 // Get daily updates by status for user (Authenticated Customer) - Must come before /:dailyUpdateId
 router.get("/user/status/:status", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesByStatusForUser);
 
@@ -19,8 +18,16 @@ router.get("/user/status/:status", authenticate, authorizeRoles("user"), DailyUp
 router.get("/user/updates", authenticate, authorizeRoles("user"), DailyUpdatesController.getDailyUpdatesForUser);
 
 // Get all daily updates
-router.get("/", DailyUpdatesController.getAllDailyUpdates);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getAllDailyUpdates);
 
+// Get pending daily updates
+router.get("/pending", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getPendingDailyUpdates);
+
+// Get approved daily updates
+router.get("/approved", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getApprovedDailyUpdates);
+
+// Get rejected daily updates
+router.get("/rejected", authenticate, authorizeRoles("admin", "supervisor", "user"), DailyUpdatesController.getRejectedDailyUpdates);
 
 // Get daily updates for assigned projects (Authenticated Supervisor) - Must come before /:dailyUpdateId
 router.get("/supervisor/assigned-projects", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.getDailyUpdatesForSupervisor);

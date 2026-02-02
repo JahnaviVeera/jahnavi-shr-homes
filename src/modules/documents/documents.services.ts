@@ -8,6 +8,7 @@ export const createDocument = async (
         documentType: string;
         description?: string;
         projectId?: string;
+        userId?: string;
         createdAt?: Date;
         updatedAt?: Date;
     },
@@ -65,6 +66,10 @@ export const createDocument = async (
         createData.project = { connect: { projectId: data.projectId } };
     }
 
+    if (data.userId) {
+        createData.user = { connect: { userId: data.userId } };
+    }
+
     const newDocument = await prisma.document.create({
         data: createData
     });
@@ -89,19 +94,20 @@ export const getDocumentById = async (documentId: string, userContext?: { userId
 
     // Access Control Check
     if (userContext && userContext.role === 'user') {
-        // If document is linked to a project, check if that project belongs to the user
-        if (document.project && document.project.customerId !== userContext.userId) {
-            throw new Error("Access denied: You do not have permission to view this document.");
+        let hasAccess = false;
+
+        // 1. Check project ownership if linked to project
+        if (document.project && document.project.customerId === userContext.userId) {
+            hasAccess = true;
         }
-        // If document is NOT linked to a project, strictly speaking, who owns it?
-        // Assuming documents usually belong to projects. If unassigned, maybe Admin only?
-        // keeping it safe: if no project and user is 'user', maybe deny or allow?
-        // For now, if no project, we might let it slide or safer to deny if strict.
-        // Given schema, projectId is optional.
-        if (!document.projectId) {
-            // Decide policy: Only Admin accepts orphaned documents?
-            // For now, let's assume orphaned documents are not for customers.
-            // throw new Error("Access denied.");
+
+        // 2. Check direct user link (Casting to any to handle stale Prisma types)
+        if ((document as any).userId === userContext.userId) {
+            hasAccess = true;
+        }
+
+        if (!hasAccess) {
+            throw new Error("Access denied: You do not have permission to view this document.");
         }
     }
 
@@ -135,11 +141,17 @@ export const getAllDocuments = async (
 
     // 3. ROLE-BASED ACCESS CONTROL
     if (userContext && userContext.role === 'user') {
-        // Force filter: Only projects where customerId == userContext.userId
-        where.project = {
-            ...(where.project || {}), // preserve existing project filters if any
-            customerId: userContext.userId
-        };
+        // Force filter: Only projects where customerId == userContext.userId OR direct userId link
+        where.OR = [
+            {
+                project: {
+                    customerId: userContext.userId
+                }
+            },
+            {
+                userId: userContext.userId
+            }
+        ];
     }
 
     const documents = await prisma.document.findMany({
@@ -257,6 +269,7 @@ export const updateDocument = async (
         documentType?: string;
         description?: string;
         projectId?: string | null;
+        userId?: string | null;
         updatedAt?: Date;
     },
     file?: {
@@ -297,6 +310,15 @@ export const updateDocument = async (
             dataToUpdate.project = { connect: { projectId: updateData.projectId } };
         } else {
             dataToUpdate.project = { disconnect: true };
+        }
+    }
+
+    // Update user ID if provided
+    if (updateData.userId !== undefined) {
+        if (updateData.userId) {
+            dataToUpdate.user = { connect: { userId: updateData.userId } };
+        } else {
+            dataToUpdate.user = { disconnect: true };
         }
     }
 

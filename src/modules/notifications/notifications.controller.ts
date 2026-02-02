@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import prisma from "../../config/prisma.client";
 const NotificationServices = require("./notifications.services");
 
 interface RequestWithUser extends Request {
@@ -35,7 +36,12 @@ interface RequestWithUser extends Request {
 // GET /api/notifications
 exports.getNotifications = async (req: RequestWithUser, res: Response) => {
     try {
-        const userId = req.user?.userId;
+        let userId = req.user?.userId;
+        if (!userId && req.user?.email) {
+            const user = await prisma.user.findFirst({ where: { email: { equals: req.user.email, mode: 'insensitive' } } });
+            userId = user?.userId;
+        }
+
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
@@ -88,7 +94,12 @@ exports.getNotifications = async (req: RequestWithUser, res: Response) => {
  */
 exports.getUnreadCount = async (req: RequestWithUser, res: Response) => {
     try {
-        const userId = req.user?.userId;
+        let userId = req.user?.userId;
+        if (!userId && req.user?.email) {
+            const user = await prisma.user.findFirst({ where: { email: { equals: req.user.email, mode: 'insensitive' } } });
+            userId = user?.userId;
+        }
+
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }
@@ -133,7 +144,12 @@ exports.getUnreadCount = async (req: RequestWithUser, res: Response) => {
  */
 exports.markAsRead = async (req: RequestWithUser, res: Response) => {
     try {
-        const userId = req.user?.userId;
+        let userId = req.user?.userId;
+        if (!userId && req.user?.email) {
+            const user = await prisma.user.findFirst({ where: { email: { equals: req.user.email, mode: 'insensitive' } } });
+            userId = user?.userId;
+        }
+
         const notificationId = req.params.notificationId as string;
 
         if (!userId) {
@@ -170,7 +186,12 @@ exports.markAsRead = async (req: RequestWithUser, res: Response) => {
  */
 exports.markAllAsRead = async (req: RequestWithUser, res: Response) => {
     try {
-        const userId = req.user?.userId;
+        let userId = req.user?.userId;
+        if (!userId && req.user?.email) {
+            const user = await prisma.user.findFirst({ where: { email: { equals: req.user.email, mode: 'insensitive' } } });
+            userId = user?.userId;
+        }
+
         if (!userId) {
             return res.status(401).json({ success: false, message: "Unauthorized" });
         }

@@ -47,7 +47,34 @@ export const createMessage = async (data: {
                     projectName: true
                 }
             },
-            parent: true // Optional: return parent info
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            },
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            }
         }
     });
 
@@ -75,6 +102,34 @@ export const getMessagesForUser = async (userId: string) => {
                     projectName: true,
                     projectId: true
                 }
+            },
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            }, // Include parent message info
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
+                }
             }
         }
     });
@@ -93,6 +148,42 @@ export const getMessagesByProject = async (projectId: string) => {
         },
         orderBy: {
             createdAt: "desc"
+        },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    projectId: true
+                }
+            },
+            parent: {
+                include: {
+                    sender: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    },
+                    receiver: {
+                        select: {
+                            userName: true,
+                            role: true
+                        }
+                    }
+                }
+            },
+            sender: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            },
+            receiver: {
+                select: {
+                    userName: true,
+                    role: true
+                }
+            }
         }
     });
 

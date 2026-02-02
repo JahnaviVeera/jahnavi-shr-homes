@@ -44,6 +44,11 @@ interface MulterRequest extends Request {
  *                 format: uuid
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
  *                 description: Optional project ID to link document to a project
+ *               userId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                 description: Optional user ID to link document directly to a user
  *               file:
  *                 type: string
  *                 format: binary
@@ -109,7 +114,10 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             });
         }
 
-        const documentData = await DocumentServices.createDocument(req.body, file);
+        const documentData = await DocumentServices.createDocument({
+            ...req.body,
+            userId: req.body.userId || null
+        }, file);
 
         return res.status(201).json({
             success: true,
@@ -200,7 +208,8 @@ exports.getDocumentById = async (req: MulterRequest, res: Response) => {
  * @swagger
  * /api/documents:
  *   get:
- *     summary: Get all documents with optional filters
+ *     summary: Get all documents (Admin/User)
+ *     description: Returns all relevant documents. Admins see all documents in the system. Regular users (Customers) only see documents linked to their projects or directly to their user ID.
  *     tags: [Documents]
  *     security:
  *       - bearerAuth: []

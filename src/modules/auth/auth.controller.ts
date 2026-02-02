@@ -212,7 +212,7 @@ exports.userLogin = async (req: Request, res: Response, next: NextFunction) => {
 exports.supervisorLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
-        console.log(email, password);
+        // console.log(email, password);
         const result = await authServices.supervisorLogin(email, password);
 
         return res.status(200).json({

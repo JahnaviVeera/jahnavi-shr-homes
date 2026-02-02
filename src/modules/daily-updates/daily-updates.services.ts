@@ -26,7 +26,8 @@ export const createDailyUpdate = async (
         status?: string;
     },
     image?: any,
-    video?: any
+    video?: any,
+    supervisorId?: string
 ) => {
     // Validate construction stage
     const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"];
@@ -65,6 +66,14 @@ export const createDailyUpdate = async (
     if (data.projectId && data.projectId.trim() !== "") {
         // Check if project exists (Decoupled)
         const project = await projectService.getProjectById(data.projectId);
+
+        // RESTRICTION: Check if project is assigned to this supervisor
+        if (supervisorId) {
+            if (project.supervisorId !== supervisorId) {
+                throw new Error("Unauthorized: You are not assigned to this project and cannot post updates for it.");
+            }
+        }
+
         validProjectId = data.projectId;
         projectName = project.projectName;
     }
@@ -165,11 +174,27 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
 
 /**
  * Get all daily updates ordered by creation date (descending)
+ * @param supervisorId - Optional supervisor ID to filter by
+ * @param customerId - Optional customer ID to filter by
  * @returns List of all daily updates
  */
-export const getAllDailyUpdates = async () => {
+export const getAllDailyUpdates = async (supervisorId?: string, customerId?: string) => {
+    const where: Prisma.DailyUpdateWhereInput = {};
+
+    if (supervisorId) {
+        where.project = {
+            supervisorId: supervisorId
+        };
+    } else if (customerId) {
+        where.project = {
+            customerId: customerId
+        };
+    }
+
     const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where,
         orderBy: { createdAt: "desc" },
+        include: { project: true }
     });
 
     if (!dailyUpdates) {
@@ -497,6 +522,41 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
 };
 
 /**
+ * Get daily updates by status with count, filtered by user role
+ * @param status - Status to filter by (pending, approved, rejected)
+ * @param supervisorId - Optional supervisor ID
+ * @param customerId - Optional customer ID
+ * @returns Object containing updates list and count
+ */
+export const getDailyUpdatesByStatus = async (status: string, supervisorId?: string, customerId?: string) => {
+    // Validate status
+    const validStatuses = ["pending", "approved", "rejected"];
+    if (!validStatuses.includes(status)) {
+        throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+    }
+
+    const statusEnum = status as DailyUpdateStatus;
+    const where: Prisma.DailyUpdateWhereInput = { status: statusEnum };
+
+    if (supervisorId) {
+        where.project = { supervisorId };
+    } else if (customerId) {
+        where.project = { customerId };
+    }
+
+    const [updates, count] = await Promise.all([
+        prisma.dailyUpdate.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+            include: { project: true }
+        }),
+        prisma.dailyUpdate.count({ where })
+    ]);
+
+    return { updates, count };
+};
+
+/**
  * Approve a daily update (Customer)
  * Validates that the update belongs to a project owned by the user.
  * @param dailyUpdateId - ID of the update to approve
@@ -553,6 +613,7 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
                 message: `Daily update for ${project.projectName} has been APPROVED by customer`,
                 dailyUpdateId: dailyUpdate.dailyUpdateId
             });
+            await notifyUser(supervisor.userId, `Daily update for ${project.projectName} has been APPROVED by customer`, "daily_update_approved");
         }
     }
 
@@ -623,6 +684,7 @@ export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) =
                 message: `Daily update for ${project.projectName} has been REJECTED by customer`,
                 dailyUpdateId: dailyUpdate.dailyUpdateId
             });
+            await notifyUser(supervisor.userId, `Daily update for ${project.projectName} has been REJECTED by customer`, "daily_update_rejected");
         }
     }
 

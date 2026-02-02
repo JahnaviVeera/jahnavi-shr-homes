@@ -262,3 +262,93 @@ export const getUnreadCount = async (req: AuthenticatedRequest, res: Response) =
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/messages/{messageId}/reply:
+ *   post:
+ *     summary: Reply to a specific message
+ *     tags: [Messages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: messageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID of the message to reply to.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["message"]
+ *             properties:
+ *               message:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Reply sent successfully
+ *       404:
+ *         description: Original message not found
+ */
+export const replyToMessage = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const messageId = req.params.messageId as string;
+        const { message } = req.body;
+
+        if (!req.user) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // 1. Fetch parent message to get context (receiver and project)
+        const parentMessage = await prisma.message.findUnique({
+            where: { messageId }
+        });
+
+        if (!parentMessage) {
+            return res.status(404).json({ success: false, message: "Original message not found" });
+        }
+
+        // 2. Resolve Sender ID (Current logged in user)
+        let senderId = req.user.userId;
+        if (!senderId) {
+            const user = await prisma.user.findFirst({ where: { email: req.user.email } });
+            if (!user) {
+                return res.status(404).json({ success: false, message: "Sender user not found" });
+            }
+            senderId = user.userId;
+        }
+
+        // 3. Determine Receiver (The other person in the conversation)
+        const receiverId = (senderId === parentMessage.senderId)
+            ? parentMessage.receiverId
+            : parentMessage.senderId;
+
+        // 4. Create the reply via service
+        const newMessage = await MessageServices.createMessage({
+            subject: parentMessage.subject ? `Re: ${parentMessage.subject}` : undefined,
+            message,
+            senderId,
+            senderRole: req.user.role,
+            receiverId,
+            projectId: parentMessage.projectId || undefined,
+            parentId: messageId
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Reply sent successfully",
+            data: newMessage
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};

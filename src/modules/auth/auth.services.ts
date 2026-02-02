@@ -130,6 +130,8 @@ export const userLogin = async (email: string, password: string) => {
  * @returns Login result with token
  */
 export const supervisorLogin = async (email: string, password: string) => {
+
+    console.log(password);
     // 1. Initial Validation & Trimming
     const trimmedEmail = email ? email.trim() : "";
     const trimmedPassword = password ? password.trim() : "";
@@ -152,6 +154,7 @@ export const supervisorLogin = async (email: string, password: string) => {
             role: true
         }
     });
+    console.log(user);
 
     if (!user) {
 
@@ -162,7 +165,7 @@ export const supervisorLogin = async (email: string, password: string) => {
     if (user.role !== UserRole.supervisor) {
         throw new AppError(401, "Invalid email or password");
     }
-
+    console.log(user.password);
     // 3. Password Verification
     if (!user.password) {
         throw new AppError(401, "Password not set for this supervisor. Please contact administrator.");

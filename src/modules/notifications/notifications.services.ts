@@ -46,7 +46,7 @@ export const markAsRead = async (notificationId: string, userId: string) => {
         throw new Error("Notification not found");
     }
 
-    if (notification.userId !== userId) {
+    if (notification.userId.toLowerCase() !== userId.toLowerCase()) {
         throw new Error("Unauthorized access to notification");
     }
 

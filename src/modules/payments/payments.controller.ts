@@ -1,6 +1,14 @@
 ﻿import type { Request, Response } from "express";
-const PaymentServices = require("./payments.services");
+import * as PaymentServices from "./payments.services";
+import * as supervisorService from "../supervisor/supervisor.services";
 
+interface RequestWithUser extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    }
+}
 
 /**
  * @swagger
@@ -131,6 +139,8 @@ exports.createPayment = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get a payment by ID
  *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: paymentId
@@ -186,7 +196,7 @@ exports.createPayment = async (req: Request, res: Response) => {
 //getId
 exports.getPaymentById = async (req: Request, res: Response) => {
     try {
-        const paymentId = req.params.paymentId;
+        const paymentId = req.params.paymentId as string;
         const payment = await PaymentServices.getPaymentByPaymentId(paymentId);
 
         return res.status(200).json({
@@ -208,6 +218,8 @@ exports.getPaymentById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all payments
  *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: search
@@ -254,10 +266,23 @@ exports.getPaymentById = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get
-exports.getAllPayments = async (req: Request, res: Response) => {
+exports.getAllPayments = async (req: RequestWithUser, res: Response) => {
     try {
         const { search } = req.query;
-        const payments = await PaymentServices.getAllThePayments(search as string);
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        // 1. Identify User Role and related filters
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+        else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+        // Admins see everything, so we leave IDs as undefined
+
+        const payments = await PaymentServices.getAllThePayments(search as string, supervisorId, customerId);
 
         return res.status(200).json({
             success: true,
@@ -371,9 +396,9 @@ exports.getAllPayments = async (req: Request, res: Response) => {
 //put
 exports.updatePayment = async (req: Request, res: Response) => {
     try {
-        const paymentId = req.params.paymentId;
+        const paymentId = req.params.paymentId as string;
 
-        const updatedData = await PaymentServices.updatePayment(paymentId, req.body, req.file);
+        const updatedData = await PaymentServices.updatePayment(paymentId, req.body, req.file as any);
 
         return res.status(200).json({
             success: true,
@@ -431,7 +456,7 @@ exports.updatePayment = async (req: Request, res: Response) => {
 //delete
 exports.deletePayment = async (req: Request, res: Response) => {
     try {
-        const paymentId = req.params.paymentId;
+        const paymentId = req.params.paymentId as string;
         const deletedData = await PaymentServices.deletePayment(paymentId)
         return res.status(200).json({
             success: true,
@@ -452,6 +477,8 @@ exports.deletePayment = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get budget summary across all projects
  *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
  *     description: Calculates total budget, payment received, payment pending, and payment progress percentage from all projects
  *     responses:
  *       200:
@@ -493,9 +520,22 @@ exports.deletePayment = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get budget summary
-exports.getBudgetSummary = async (req: Request, res: Response) => {
+exports.getBudgetSummary = async (req: RequestWithUser, res: Response) => {
     try {
-        const budgetSummary = await PaymentServices.getBudgetSummary();
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        // 1. Identify User Role and related filters
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+        else if (req.user && req.user.role === 'user') {
+            customerId = req.user.userId;
+        }
+        // Admins see everything, so we leave IDs as undefined
+
+        const budgetSummary = await PaymentServices.getBudgetSummary(supervisorId, customerId);
         return res.status(200).json({
             success: true,
             message: "Budget summary fetched successfully",
@@ -515,6 +555,8 @@ exports.getBudgetSummary = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get budget summary for a specific project
  *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
  *     description: Calculates total budget, paid amount, pending amount, and progress percentage for a specific project
  *     parameters:
  *       - in: path
@@ -575,7 +617,7 @@ exports.getBudgetSummary = async (req: Request, res: Response) => {
 //get budget summary by project
 exports.getBudgetSummaryByProject = async (req: Request, res: Response) => {
     try {
-        const projectId = req.params.projectId;
+        const projectId = req.params.projectId as string;
         const budgetSummary = await PaymentServices.getBudgetSummaryByProject(projectId);
         return res.status(200).json({
             success: true,
