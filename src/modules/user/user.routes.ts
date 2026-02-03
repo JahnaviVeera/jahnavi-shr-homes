@@ -15,6 +15,7 @@ router.get("/", UserController.getAllUsers);
 router.get("/leads/stats", authenticate, authorizeRoles("admin"), UserController.getCustomerLeadsStats);
 router.get("/leads/new", authenticate, authorizeRoles("admin"), UserController.getNewLeads);
 router.get("/leads/closed", authenticate, authorizeRoles("admin"), UserController.getClosedCustomers);
+router.get("/admin/dashboard-stats", authenticate, authorizeRoles("admin"), UserController.getAdminDashboardStats);
 
 
 
@@ -35,8 +36,10 @@ router.put("/admin/general-settings", authenticate, authorizeRoles("admin"), Use
 router.post("/admin/change-password", authenticate, authorizeRoles("admin"), UserController.changeAdminPassword);
 
 
+// Profile Routes
+router.get("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getProfile);
 router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.updateUserProfile);
-
+router.get("/dashboard-stats", authenticate, authorizeRoles("customer"), UserController.getDashboardStats);
 
 router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.changeUserPassword);
 

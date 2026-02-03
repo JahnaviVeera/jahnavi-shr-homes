@@ -2,6 +2,8 @@
 import { DocumentType } from "@prisma/client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import * as projectService from "../project/project.services";
+import { notifyUser } from "../notifications/notifications.services";
+import SocketService from "../../services/socket.service";
 
 export const createDocument = async (
     data: {
@@ -74,6 +76,33 @@ export const createDocument = async (
         data: createData
     });
 
+    // Notify Customer if linked to project
+    if (data.projectId) {
+        const project = await prisma.project.findUnique({
+            where: { projectId: data.projectId },
+            include: { customer: true }
+        });
+
+        if (project && project.customer) {
+            const customerMsg = `New document (${data.documentType}) uploaded for project ${project.projectName}`;
+            SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
+                type: "DOCUMENT_UPLOADED",
+                message: customerMsg,
+                documentId: newDocument.documentId
+            });
+            await notifyUser(project.customer.userId, customerMsg, "document_uploaded");
+        }
+    } else if (data.userId) {
+        // Direct user upload
+        const customerMsg = `New document (${data.documentType}) uploaded for you`;
+        SocketService.getInstance().emitToUser(data.userId, "notification", {
+            type: "DOCUMENT_UPLOADED",
+            message: customerMsg,
+            documentId: newDocument.documentId
+        });
+        await notifyUser(data.userId, customerMsg, "document_uploaded");
+    }
+
     return newDocument;
 };
 
@@ -93,7 +122,7 @@ export const getDocumentById = async (documentId: string, userContext?: { userId
     }
 
     // Access Control Check
-    if (userContext && userContext.role === 'user') {
+    if (userContext && userContext.role === 'customer') {
         let hasAccess = false;
 
         // 1. Check project ownership if linked to project
@@ -140,7 +169,7 @@ export const getAllDocuments = async (
     }
 
     // 3. ROLE-BASED ACCESS CONTROL
-    if (userContext && userContext.role === 'user') {
+    if (userContext && userContext.role === 'customer') {
         // Force filter: Only projects where customerId == userContext.userId OR direct userId link
         where.OR = [
             {
@@ -181,7 +210,7 @@ export const getAllDocuments = async (
 //     const where: any = { documentType: documentType as DocumentType };
 
 //     // Access Control
-//     if (userContext && userContext.role === 'user') {
+//     if (userContext && userContext.role === 'customer') {
 //         where.project = {
 //             customerId: userContext.userId
 //         };
@@ -209,7 +238,7 @@ export const getDocumentsByProject = async (projectId: string, userContext?: { u
     }
 
     // Access Control Pre-check
-    if (userContext && userContext.role === 'user') {
+    if (userContext && userContext.role === 'customer') {
         // Verify project ownership first
         const projectCheck = await prisma.project.findUnique({
             where: { projectId },

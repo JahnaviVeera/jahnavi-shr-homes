@@ -2,7 +2,10 @@ import dotenv from "dotenv";
 import jwt, { SignOptions } from "jsonwebtoken";
 
 // Ensure dotenv is loaded before accessing environment variables
-dotenv.config({ path: "./src/config/.env" });
+import path from "path";
+
+// Ensure environment variables are loaded from project root
+dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 interface TokenPayload {
     userId: string;

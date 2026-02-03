@@ -30,7 +30,7 @@ router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supe
 
 
 // Get all quotations (Admin, Supervisor, maybe User?)
-router.get("/", authenticate, authorizeRoles("admin", "supervisor"), QuotationController.getAllQuotations);
+router.get("/", authenticate, authorizeRoles("admin", "customer"), QuotationController.getAllQuotations);
 
 
 // Get pending quotations (must be before /:quotationId route)

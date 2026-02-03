@@ -1,6 +1,7 @@
 ﻿import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
 import { SupervisorStatus, UserRole, Prisma } from "@prisma/client";
+import { notifyUser } from "../notifications/notifications.services";
 
 // Create a new supervisor
 export const createSupervisor = async (data: {
@@ -333,6 +334,20 @@ export const assignProjectToSupervisor = async (supervisorId: string, projectId:
     // Remove password from response
     const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
 
+    // Notify the supervisor
+    const project = await prisma.project.findUnique({
+        where: { projectId },
+        select: { projectName: true }
+    });
+
+    if (project) {
+        await notifyUser(
+            supervisor.userId,
+            `You have been assigned to a new project: ${project.projectName}`,
+            "PROJECT_ASSIGNED"
+        );
+    }
+
     return {
         ...supervisorWithoutPassword,
         assignedProjectsCount: projectsCount,
@@ -380,6 +395,21 @@ export const removeProjectFromSupervisor = async (supervisorId: string, projectI
 
     // Remove password from response
     const { password: _, ...supervisorWithoutPassword } = freshSupervisor;
+
+    // Notify the supervisor
+    const project = await prisma.project.findUnique({
+        where: { projectId },
+        select: { projectName: true }
+    });
+
+    if (project) {
+        await notifyUser(
+            supervisor.userId,
+            `You have been removed from project: ${project.projectName}`,
+            "PROJECT_REMOVED"
+        );
+    }
+
     return {
         ...supervisorWithoutPassword,
         assignedProjectsCount: projectsCount

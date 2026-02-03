@@ -24,7 +24,10 @@ router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin")
 router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getProjectById);
 
 
+
 router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
+
+router.get("/project-summary", authenticate, authorizeRoles("customer"), projectController.getProjectSummary);
 
 export default router;
 

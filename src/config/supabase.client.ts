@@ -4,14 +4,8 @@ import * as path from 'path';
 
 // Ensure environment variables are loaded if this is imported directly
 // Checks for local .env in the same directory (useful for dev)
-if (!process.env.SUPABASE_URL) {
-    dotenv.config({ path: path.resolve(__dirname, '.env') });
-}
-
-// Check again, if still missing, try looking two levels up (project root) in case of weird CWD
-if (!process.env.SUPABASE_URL) {
-    dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-}
+// Ensure environment variables are loaded from project root
+dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 
 const supabaseUrl = process.env.SUPABASE_URL;

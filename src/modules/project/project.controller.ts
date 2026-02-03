@@ -283,3 +283,78 @@ exports.deleteProject = async (req: Request, res: Response) => {
         })
     }
 }
+
+/**
+ * @swagger
+ * /api/project/project-summary:
+ *   get:
+ *     summary: Get project summary for the logged-in user
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Project summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         projectName:
+ *                           type: string
+ *                         projectType:
+ *                           type: string
+ *                         location:
+ *                           type: string
+ *                         initialStatus:
+ *                           type: string
+ *                         startDate:
+ *                           type: string
+ *                         expectedCompletion:
+ *                           type: string
+ *                         totalBudget:
+ *                           type: number
+ *                         supervisorName:
+ *                           type: string
+ *       404:
+ *         description: No project found for this user
+ */
+exports.getProjectSummary = async (req: Request, res: Response) => {
+    try {
+        const authReq = req as any;
+        const userId = authReq.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const projectSummary = await ProjectServices.getProjectSummaryForUser(userId);
+
+        if (!projectSummary) {
+            return res.status(404).json({
+                success: false,
+                message: "No project found for this user"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Project summary fetched successfully",
+            data: projectSummary
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};

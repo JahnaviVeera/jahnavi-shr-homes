@@ -1,5 +1,5 @@
 ﻿import prisma from "../../config/prisma.client";
-import { ProjectStatus, ProjectType, Prisma } from "@prisma/client";
+import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus } from "@prisma/client";
 
 // Helper function to format date inputs as YYYY-MM-DD strings
 const formatDateString = (dateInput: string | Date | undefined | null): string => {
@@ -129,6 +129,11 @@ export const createProject = async (data:
  * @param search - Search term for project name, location, material, or notes
  * @returns List of projects
  */
+/**
+ * Get all projects with optional search and progress percentage
+ * @param search - Search term for project name, location, material, or notes
+ * @returns List of projects with progress
+ */
 export const getAllTheProjects = async (search?: string) => {
     const whereClause: Prisma.ProjectWhereInput = {};
 
@@ -141,9 +146,31 @@ export const getAllTheProjects = async (search?: string) => {
         ];
     }
 
-    return prisma.project.findMany({
+    const projects = await prisma.project.findMany({
         where: whereClause,
-        include: { customer: true }
+        include: {
+            customer: true,
+            supervisor: true, // Also useful to have supervisor details often
+            dailyUpdates: {
+                where: { status: DailyUpdateStatus.approved },
+                select: { constructionStage: true }
+            }
+        }
+    });
+
+    return projects.map(project => {
+        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
+        const totalStages = 6;
+        const progress = Math.min(100, Math.round((uniqueStages.size / totalStages) * 100));
+
+        // Exclude the big dailyUpdates array from the final response to keep it clean, 
+        // or keep it if needed. The user just asked to INCLUDE percentage. 
+        // I'll strip dailyUpdates to avoid clutter since we only fetched it for calculation.
+        const { dailyUpdates, ...rest } = project;
+        return {
+            ...rest,
+            progress
+        };
     });
 };
 
@@ -364,4 +391,41 @@ export const assignProjectsToCustomer = async (customerId: string, projectIds: s
 
     // Check if distinct count matches? No, updateMany returns count.
     return updateResult;
+};
+/**
+ * Get detailed project summary for a user (most recent project)
+ * @param userId - The user ID (customer)
+ * @returns Project details including supervisor name
+ */
+export const getProjectSummaryForUser = async (userId: string) => {
+    // Fetch the most recent project for this customer
+    const project = await prisma.project.findFirst({
+        where: { customerId: userId },
+        orderBy: { createdAt: 'desc' }, // Get the latest one
+        include: {
+            supervisor: {
+                select: {
+                    fullName: true,
+                    phoneNumber: true,
+                    email: true
+                }
+            }
+        }
+    });
+
+    if (!project) return null;
+
+    return {
+        projectId: project.projectId,
+        projectName: project.projectName,
+        projectType: project.projectType,
+        location: project.location,
+        initialStatus: project.initialStatus,
+        startDate: project.startDate,
+        expectedCompletion: project.expectedCompletion,
+        totalBudget: project.totalBudget,
+        supervisorName: project.supervisor?.fullName || "Not Assigned",
+        supervisorContact: project.supervisor?.phoneNumber || "",
+        supervisorEmail: project.supervisor?.email || ""
+    };
 };

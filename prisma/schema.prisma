@@ -127,6 +127,7 @@ model User {
   timezone String? @default("UTC") @db.VarChar(100)
   currency String? @default("USD") @db.VarChar(20)
   language String? @default("English") @db.VarChar(50)
+  address  String? @db.VarChar(255)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

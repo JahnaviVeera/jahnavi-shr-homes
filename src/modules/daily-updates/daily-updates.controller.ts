@@ -188,8 +188,8 @@ export const getAllDailyUpdates = async (req: RequestWithUser, res: Response) =>
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
         }
-        // If user is a regular customer (role 'user'), they only see their projects
-        else if (req.user && req.user.role === 'user') {
+        // If user is a regular customer (role 'customer'), they only see their projects
+        else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
 
@@ -616,7 +616,7 @@ export const getPendingDailyUpdates = async (req: RequestWithUser, res: Response
         if (req.user && req.user.role === 'supervisor') {
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
-        } else if (req.user && req.user.role === 'user') {
+        } else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
 
@@ -656,7 +656,7 @@ export const getApprovedDailyUpdates = async (req: RequestWithUser, res: Respons
         if (req.user && req.user.role === 'supervisor') {
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
-        } else if (req.user && req.user.role === 'user') {
+        } else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
 
@@ -696,7 +696,7 @@ export const getRejectedDailyUpdates = async (req: RequestWithUser, res: Respons
         if (req.user && req.user.role === 'supervisor') {
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
-        } else if (req.user && req.user.role === 'user') {
+        } else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
 

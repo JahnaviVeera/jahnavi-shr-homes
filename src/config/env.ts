@@ -1,12 +1,13 @@
 import { config as dotenvConfig } from "dotenv";
 import path from "path";
 
-// Load .env file
-dotenvConfig({ path: path.join(__dirname, ".env") });
+// Load .env file from project root
+dotenvConfig({ path: path.join(process.cwd(), ".env") });
 
 interface Config {
     PORT: number;
     DATABASE_URL: string;
+    DATABASE_PUBLIC_URL: string | undefined;
     JWT_SECRET: string;
     JWT_EXPIRY: string;
     ADMIN_EMAIL: string;
@@ -33,6 +34,7 @@ for (const envVar of requiredEnvVars) {
 export const config: Config = {
     PORT: parseInt(process.env.PORT || "3000", 10),
     DATABASE_URL: process.env.DATABASE_URL!,
+    DATABASE_PUBLIC_URL: process.env.DATABASE_PUBLIC_URL,
     JWT_SECRET: process.env.JWT_SECRET!,
     JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
     ADMIN_EMAIL: process.env.ADMIN_EMAIL!,
