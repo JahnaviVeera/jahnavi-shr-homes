@@ -16,6 +16,7 @@ export const createUser = async (data: {
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
+    address?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }) => {
@@ -48,6 +49,7 @@ export const createUser = async (data: {
         timezone: data.timezone || "UTC",
         currency: data.currency || "USD",
         language: data.language || "English",
+        address: data.address || null,
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -80,6 +82,7 @@ export const getUserById = async (userId: string) => {
             timezone: true,
             currency: true,
             language: true,
+            address: true,
             createdAt: true,
             updatedAt: true,
         }
@@ -146,6 +149,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
+    address?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
 }) => {
@@ -172,6 +176,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.timezone !== undefined) dataToUpdate.timezone = updatedUserData.timezone;
     if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
     if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
+    if (updatedUserData.address !== undefined) dataToUpdate.address = updatedUserData.address;
 
 
 
@@ -308,4 +313,126 @@ export const getClosedCustomersList = async () => {
             customer: userDetails
         };
     });
+};
+
+/**
+ * Get dashboard statistics for a customer
+ * @param userId - The ID of the customer
+ * @returns Object with dashboard metrics
+ */
+export const getCustomerDashboardStats = async (userId: string) => {
+    // Get all projects for this customer
+    const projects = await prisma.project.findMany({
+        where: { customerId: userId },
+        include: {
+            payments: true,
+            quotations: true,
+            dailyUpdates: true
+        }
+    });
+
+    if (!projects || projects.length === 0) {
+        return {
+            projectProgress: 0,
+            pendingApprovals: 0,
+            paidAmount: 0,
+            pendingAmount: 0
+        };
+    }
+
+    let totalBudget = 0;
+    let totalPaid = 0;
+    let pendingApprovals = 0;
+
+    // For progress, we'll focus on the most recent active project ("Inprogress") 
+    // or the most recent one if none are active.
+    // Let's sort projects by creation date to find the latest
+    const sortedProjects = [...projects].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const latestProject = sortedProjects[0];
+
+    // Calculate Metrics
+    for (const project of projects) {
+        // Budget
+        totalBudget += Number(project.totalBudget);
+
+        // Paid Amount
+        const projectPaid = project.payments
+            .filter(p => p.paymentStatus === 'completed')
+            .reduce((sum, p) => sum + Number(p.amount), 0);
+        totalPaid += projectPaid;
+
+        // Pending Approvals (Quotations linked to project)
+        const pendingQuotes = project.quotations.filter(q => q.status === 'pending').length;
+        pendingApprovals += pendingQuotes;
+
+        // Pending Approvals (Daily Updates linked to project)
+        // Wait, daily updates are usually approved by the customer?
+        // Yes, schema has "approveDailyUpdate" by customer.
+        // So status 'pending' means waiting for customer approval.
+        const pendingUpdates = project.dailyUpdates.filter(du => du.status === 'pending').length;
+        pendingApprovals += pendingUpdates;
+    }
+
+    // Pending Amount (Balance)
+    const pendingAmount = Math.max(0, totalBudget - totalPaid);
+
+    // Project Progress (Latest Project)
+    let projectProgress = 0;
+    if (latestProject) {
+        const approvedUpdates = latestProject.dailyUpdates.filter(du => du.status === 'approved');
+        const uniqueStages = new Set(approvedUpdates.map(du => du.constructionStage));
+        // Total stages = 6 (from Enum)
+        const totalStages = 6;
+        projectProgress = Math.min(100, Math.round((uniqueStages.size / totalStages) * 100));
+    }
+
+    return {
+        projectProgress,     // Percentage (0-100)
+        pendingApprovals,    // Count
+        paidAmount: totalPaid, // Currency value
+        pendingAmount        // Currency value
+    };
+};
+
+/**
+ * Get dashboard statistics for admin
+ * @returns Object with dashboard metrics
+ */
+export const getAdminDashboardStats = async () => {
+    // 1. Total Projects
+    const totalProjects = await prisma.project.count();
+
+    // 2. Active Supervisors (Assuming 'Active' status or purely existence)
+    // The schema has SupervisorStatus enum with 'Active', 'Inactive', 'reject'.
+    const activeSupervisors = await prisma.supervisor.count({
+        where: {
+            status: 'Active'
+        }
+    });
+
+    // 3. Pending Approvals
+    // This typically includes:
+    // - Pending Quotations (Admin might review them before customer? Or just global count)
+    // - Pending Daily Updates (Usually supervisor->admin->customer or supervisor->customer)
+    // - Pending Supervisor Approvals ? (If that flow exists)
+    // Let's count pending Quotations and pending Daily Updates for now as a global metric.
+
+    // Pending Quotations
+    const pendingQuotations = await prisma.quotation.count({
+        where: { status: 'pending' }
+    });
+
+    // Pending Daily Updates
+    const pendingApps = await prisma.dailyUpdate.count({
+        where: { status: 'pending' }
+    });
+
+    // Total Pending
+    const totalPendingApprovals = pendingQuotations + pendingApps;
+
+    return {
+        totalProjects,
+        activeSupervisors,
+        pendingApprovals: totalPendingApprovals
+    };
 };

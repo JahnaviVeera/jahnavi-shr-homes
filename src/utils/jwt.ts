@@ -2,7 +2,10 @@ import dotenv from "dotenv";
 import jwt, { SignOptions } from "jsonwebtoken";
 
 // Ensure dotenv is loaded before accessing environment variables
-dotenv.config({ path: "./src/config/.env" });
+import path from "path";
+
+// Ensure environment variables are loaded from project root
+dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 interface TokenPayload {
     userId: string;
@@ -49,8 +52,8 @@ export const generateUserToken = (userId: string, email: string, role: string): 
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
-    if (role !== "user" && role !== "supervisor") {
-        throw new Error("Invalid role. Must be 'user' or 'supervisor'");
+    if (role !== "customer" && role !== "supervisor") {
+        throw new Error("Invalid role. Must be 'customer' or 'supervisor'");
     }
 
     const payload: TokenPayload = {

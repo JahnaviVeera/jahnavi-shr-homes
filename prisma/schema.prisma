@@ -13,7 +13,7 @@ datasource db {
 
 enum UserRole {
   admin
-  user
+  customer
   supervisor
 
   @@map("users_role_enum")
@@ -127,6 +127,7 @@ model User {
   timezone String? @default("UTC") @db.VarChar(100)
   currency String? @default("USD") @db.VarChar(20)
   language String? @default("English") @db.VarChar(50)
+  address  String? @db.VarChar(255)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -182,12 +183,19 @@ model Project {
   projectType        ProjectType
   location           String        @db.VarChar(255)
   initialStatus      ProjectStatus
-  startDate          DateTime      @db.Date
-  expectedCompletion DateTime      @db.Date
+  startDate          String        @db.VarChar(10)
+  expectedCompletion String        @db.VarChar(10)
   totalBudget        Decimal       @db.Decimal(12, 2)
   materialName       String        @db.VarChar(255)
   quantity           Int
   notes              String        @db.Text
+  projectManager     String?       @map("project_manager") @db.VarChar(255)
+  area               String?       @map("area") @db.VarChar(100)
+  numberOfFloors     Int?          @map("number_of_floors")
+  priority           String?       @default("Medium") @db.VarChar(50)
+  currency           String?       @default("INR") @db.VarChar(20)
+  description        String?       @db.Text
+
 
   // New Fields Matching UI
   customerId String @db.Uuid
@@ -293,7 +301,7 @@ model Expense {
 
   category    ExpenseCategory
   amount      Decimal         @db.Decimal(12, 2)
-  date        DateTime        @db.Date
+  date        String          @db.VarChar(10)
   description String?         @db.Text
   status      ExpenseStatus   @default(pending)
 
@@ -311,7 +319,7 @@ model Material {
 
   materialName String   @db.VarChar(255)
   quantity     Int
-  date         DateTime @db.Date
+  date         String   @db.VarChar(10)
   notes        String?  @db.Text
   vendor       String?  @db.VarChar(255)
 
@@ -350,7 +358,7 @@ model Payment {
   paymentType    PaymentType   @default(Standard) @map("payment_type")
   paymentMethod  PaymentMethod @default(cash)
   paymentBreakup Json?         @default("[]") @map("payment_breakup")
-  paymentDate    DateTime      @db.Date
+  paymentDate    String        @db.VarChar(10)
   remarks        String?       @db.Text
 
   // File upload fields
@@ -370,7 +378,7 @@ model Quotation {
   totalAmount Decimal         @db.Decimal(12, 2)
   status      QuotationStatus @default(pending)
   lineItems   Json?           @default("[]")
-  date        DateTime?       @db.Date
+  date        String?         @db.VarChar(10)
 
   projectId String?  @db.Uuid
   project   Project? @relation(fields: [projectId], references: [projectId])

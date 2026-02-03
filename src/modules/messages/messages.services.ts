@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma.client";
-// import { Message } from "@prisma/client"; // Will be available after generate
+import { notifyUser } from "../notifications/notifications.services";
+import SocketService from "../../services/socket.service";
 
 export const createMessage = async (data: {
     subject?: string;
@@ -28,16 +29,10 @@ export const createMessage = async (data: {
         message: data.message,
         senderId: data.senderId,
         receiverId: data.receiverId,
+        projectId: data.projectId || null,
+        parentId: data.parentId || null,
         isRead: false,
     };
-
-    if (data.projectId) {
-        createData.project = { connect: { projectId: data.projectId } };
-    }
-
-    if (data.parentId) {
-        createData.parent = { connect: { messageId: data.parentId } };
-    }
 
     const newMessage = await prisma.message.create({
         data: createData,
@@ -77,6 +72,23 @@ export const createMessage = async (data: {
             }
         }
     });
+
+    // Notify the receiver
+    try {
+        const senderName = newMessage.sender?.userName || "Someone";
+        const notifyMessage = `New message from ${senderName}: ${data.message.substring(0, 30)}${data.message.length > 30 ? "..." : ""}`;
+
+        await notifyUser(data.receiverId, notifyMessage, "message");
+
+        // Send real-time update via Socket.io
+        const socketService = SocketService.getInstance();
+        socketService.emitToUser(data.receiverId, "receive_message", newMessage); // 'receive_message' event for chat
+        socketService.emitToUser(data.receiverId, "notification", { message: notifyMessage, type: "message" }); // General notification
+
+    } catch (err) {
+        console.error("Failed to send notification/socket event:", err);
+        // Don't fail the request if notification fails, just log it
+    }
 
     return newMessage;
 };

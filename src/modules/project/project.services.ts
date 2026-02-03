@@ -1,17 +1,14 @@
 ﻿import prisma from "../../config/prisma.client";
-import { ProjectStatus, ProjectType, Prisma } from "@prisma/client";
+import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus } from "@prisma/client";
 
-// Helper function to parse date strings to Date objects
-const parseDate = (dateInput: string | Date): Date => {
-    if (dateInput instanceof Date) {
-        return dateInput;
-    }
-    // If it's a date string like "2024-01-15", convert to full ISO date
-    const date = new Date(dateInput);
+// Helper function to format date inputs as YYYY-MM-DD strings
+const formatDateString = (dateInput: string | Date | undefined | null): string => {
+    if (!dateInput) return "";
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
     if (isNaN(date.getTime())) {
         throw new Error(`Invalid date format: ${dateInput}`);
     }
-    return date;
+    return date.toISOString().split('T')[0] ?? "";
 };
 
 import SocketService from "../../services/socket.service";
@@ -31,6 +28,14 @@ export const createProject = async (data:
         notes?: string,
         customerId: string | null,
         supervisorId: string | null,
+        // New fields
+        projectManager?: string,
+        area?: string,
+        numberOfFloors?: number,
+        priority?: string,
+        currency?: string,
+        description?: string,
+
         createdAt?: Date,
         updatedAt?: Date
     }) => {
@@ -92,14 +97,22 @@ export const createProject = async (data:
             projectType: data.projectType as ProjectType,
             location: data.location,
             initialStatus: data.initialStatus as ProjectStatus,
-            startDate: parseDate(data.startDate),
-            expectedCompletion: parseDate(data.expectedCompletion),
+            startDate: formatDateString(data.startDate),
+            expectedCompletion: formatDateString(data.expectedCompletion),
             totalBudget: data.totalBudget,
             materialName: data.materialName || "",
             quantity: data.quantity || 0,
             notes: data.notes || "",
             customerId: data.customerId as string,
             supervisorId: data.supervisorId,
+
+            projectManager: data.projectManager || null,
+            area: data.area || null,
+            numberOfFloors: data.numberOfFloors || null,
+            priority: data.priority || "Medium",
+            currency: data.currency || "INR",
+            description: data.description || "",
+
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -132,6 +145,11 @@ export const createProject = async (data:
  * @param search - Search term for project name, location, material, or notes
  * @returns List of projects
  */
+/**
+ * Get all projects with optional search and progress percentage
+ * @param search - Search term for project name, location, material, or notes
+ * @returns List of projects with progress
+ */
 export const getAllTheProjects = async (search?: string) => {
     const whereClause: Prisma.ProjectWhereInput = {};
 
@@ -144,9 +162,31 @@ export const getAllTheProjects = async (search?: string) => {
         ];
     }
 
-    return prisma.project.findMany({
+    const projects = await prisma.project.findMany({
         where: whereClause,
-        include: { customer: true }
+        include: {
+            customer: true,
+            supervisor: true, // Also useful to have supervisor details often
+            dailyUpdates: {
+                where: { status: DailyUpdateStatus.approved },
+                select: { constructionStage: true }
+            }
+        }
+    });
+
+    return projects.map(project => {
+        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
+        const totalStages = 6;
+        const progress = Math.min(100, Math.round((uniqueStages.size / totalStages) * 100));
+
+        // Exclude the big dailyUpdates array from the final response to keep it clean, 
+        // or keep it if needed. The user just asked to INCLUDE percentage. 
+        // I'll strip dailyUpdates to avoid clutter since we only fetched it for calculation.
+        const { dailyUpdates, ...rest } = project;
+        return {
+            ...rest,
+            progress
+        };
     });
 };
 
@@ -164,6 +204,15 @@ export const updateProject = async (projectId: string, updateData: {
     notes?: string,
     customerId?: string,
     supervisorId?: string | null,
+
+    // New fields
+    projectManager?: string,
+    area?: string,
+    numberOfFloors?: number,
+    priority?: string,
+    currency?: string,
+    description?: string,
+
     updatedAt?: Date
 } | undefined | null) => {
     // Check if updateData is provided
@@ -203,12 +252,21 @@ export const updateProject = async (projectId: string, updateData: {
         dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
     }
 
-    if (updateData.startDate !== undefined) dataToUpdate.startDate = parseDate(updateData.startDate);
-    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = parseDate(updateData.expectedCompletion);
+    if (updateData.startDate !== undefined) dataToUpdate.startDate = formatDateString(updateData.startDate);
+    if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = formatDateString(updateData.expectedCompletion);
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
+    if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
     if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
+
+    // New fields
+    if (updateData.projectManager !== undefined) dataToUpdate.projectManager = updateData.projectManager;
+    if (updateData.area !== undefined) dataToUpdate.area = updateData.area;
+    if (updateData.numberOfFloors !== undefined) dataToUpdate.numberOfFloors = updateData.numberOfFloors;
+    if (updateData.priority !== undefined) dataToUpdate.priority = updateData.priority;
+    if (updateData.currency !== undefined) dataToUpdate.currency = updateData.currency;
+    if (updateData.description !== undefined) dataToUpdate.description = updateData.description;
 
     if (updateData.customerId !== undefined) {
         // Validate Customer
@@ -367,4 +425,41 @@ export const assignProjectsToCustomer = async (customerId: string, projectIds: s
 
     // Check if distinct count matches? No, updateMany returns count.
     return updateResult;
+};
+/**
+ * Get detailed project summary for a user (most recent project)
+ * @param userId - The user ID (customer)
+ * @returns Project details including supervisor name
+ */
+export const getProjectSummaryForUser = async (userId: string) => {
+    // Fetch the most recent project for this customer
+    const project = await prisma.project.findFirst({
+        where: { customerId: userId },
+        orderBy: { createdAt: 'desc' }, // Get the latest one
+        include: {
+            supervisor: {
+                select: {
+                    fullName: true,
+                    phoneNumber: true,
+                    email: true
+                }
+            }
+        }
+    });
+
+    if (!project) return null;
+
+    return {
+        projectId: project.projectId,
+        projectName: project.projectName,
+        projectType: project.projectType,
+        location: project.location,
+        initialStatus: project.initialStatus,
+        startDate: project.startDate,
+        expectedCompletion: project.expectedCompletion,
+        totalBudget: project.totalBudget,
+        supervisorName: project.supervisor?.fullName || "Not Assigned",
+        supervisorContact: project.supervisor?.phoneNumber || "",
+        supervisorEmail: project.supervisor?.email || ""
+    };
 };

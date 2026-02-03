@@ -27,13 +27,14 @@ exports.getProfile = async (req: AuthenticatedRequest, res: Response) => {
             return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
         }
 
-        // userId from commonAuthMiddleware is mapped to supervisorId for supervisors
-        const supervisorId = req.user.userId;
-        if (!supervisorId) {
-            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        const userId = req.user.userId;
+        if (!userId) {
+            return res.status(404).json({ success: false, message: "User ID not found in token" });
         }
 
-        const profile = await SupervisorServices.getSupervisorProfile(supervisorId);
+        // Resolve supervisorId from userId
+        const supervisor = await SupervisorServices.getSupervisorByUserId(userId);
+        const profile = await SupervisorServices.getSupervisorProfile(supervisor.supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -79,12 +80,14 @@ exports.updateProfile = async (req: AuthenticatedRequest, res: Response) => {
             return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
         }
 
-        const supervisorId = req.user.userId;
-        if (!supervisorId) {
-            return res.status(404).json({ success: false, message: "Supervisor ID not found in token" });
+        const userId = req.user.userId;
+        if (!userId) {
+            return res.status(404).json({ success: false, message: "User ID not found in token" });
         }
 
-        const updatedProfile = await SupervisorServices.updateSupervisor(supervisorId, req.body);
+        // Resolve supervisorId from userId
+        const supervisor = await SupervisorServices.getSupervisorByUserId(userId);
+        const updatedProfile = await SupervisorServices.updateSupervisor(supervisor.supervisorId, req.body);
 
         return res.status(200).json({
             success: true,
@@ -646,13 +649,16 @@ exports.getMyAssignedProjects = async (req: AuthenticatedRequest, res: Response)
             return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
         }
 
-        const supervisorId = req.user.userId;
-        if (!supervisorId) {
-            return res.status(401).json({ success: false, message: "Supervisor ID not found in token" });
+        const userId = req.user.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "User ID not found in token" });
         }
 
+        // Resolve supervisorId from userId
+        const supervisor = await SupervisorServices.getSupervisorByUserId(userId);
+
         // Reuse the existing service but extract just the projects list for the response
-        const result = await SupervisorServices.getAssignedProjects(supervisorId);
+        const result = await SupervisorServices.getAssignedProjects(supervisor.supervisorId);
 
         return res.status(200).json({
             success: true,

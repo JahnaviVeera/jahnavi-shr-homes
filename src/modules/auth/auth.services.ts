@@ -86,7 +86,7 @@ export const userLogin = async (email: string, password: string) => {
     const user = await Prisma.user.findFirst({
         where: {
             email: { equals: trimmedEmail, mode: 'insensitive' },
-            role: UserRole.user
+            role: UserRole.customer
         },
         select: {
             userId: true,

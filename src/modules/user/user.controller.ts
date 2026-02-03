@@ -174,8 +174,8 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 example: "John Doe"
  *               role:
  *                 type: string
- *                 enum: ["admin", "user", "supervisor"]
- *                 example: "user"
+ *                 enum: ["admin", "customer", "supervisor"]
+ *                 example: "customer"
  *               email:
  *                 type: string
  *                 format: email
@@ -1013,6 +1013,40 @@ exports.changeAdminPassword = async (req: AuthRequest, res: Response) => {
 /**
  * @swagger
  * /api/user/profile:
+ *   get:
+ *     summary: Get own profile and project summary
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile fetched successfully
+ */
+exports.getProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            data: user
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile:
  *   put:
  *     summary: Update own profile
  *     tags: [Users]
@@ -1028,6 +1062,8 @@ exports.changeAdminPassword = async (req: AuthRequest, res: Response) => {
  *               userName:
  *                 type: string
  *               contact:
+ *                 type: string
+ *               address:
  *                 type: string
  *               companyName:
  *                 type: string
@@ -1058,12 +1094,13 @@ exports.updateUserProfile = async (req: AuthRequest, res: Response) => {
         }
 
         // Filter allowed fields to update
-        const { userName, contact, companyName, notes } = req.body;
+        const { userName, contact, companyName, notes, address } = req.body;
         const dataToUpdate = {
             userName,
             contact,
             companyName,
-            notes
+            notes,
+            address
         };
 
         const updatedUser = await UserServices.updateUser(userId, dataToUpdate);
@@ -1211,5 +1248,123 @@ exports.getClosedCustomers = async (req: Request, res: Response, next: NextFunct
         });
     } catch (error) {
         next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/dashboard-stats:
+ *   get:
+ *     summary: Get dashboard statistics for the logged-in customer
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard stats fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     projectProgress:
+ *                       type: integer
+ *                       description: Percentage completion of the latest project
+ *                     pendingApprovals:
+ *                       type: integer
+ *                       description: Count of pending items (daily updates + quotations)
+ *                     paidAmount:
+ *                       type: number
+ *                       description: Total verified paid amount
+ *                     pendingAmount:
+ *                       type: number
+ *                       description: Outstanding balance (Total Budget - Paid)
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getDashboardStats = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const stats = await UserServices.getCustomerDashboardStats(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Dashboard stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/dashboard-stats:
+ *   get:
+ *     summary: Get dashboard statistics for admin
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin dashboard stats fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalProjects:
+ *                       type: integer
+ *                       description: Total count of projects
+ *                     activeSupervisors:
+ *                       type: integer
+ *                       description: Count of active supervisors
+ *                     pendingApprovals:
+ *                       type: integer
+ *                       description: Total pending approvals (quotations + daily updates)
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+exports.getAdminDashboardStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await UserServices.getAdminDashboardStats();
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin dashboard stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
     }
 };

@@ -15,6 +15,7 @@ router.get("/", UserController.getAllUsers);
 router.get("/leads/stats", authenticate, authorizeRoles("admin"), UserController.getCustomerLeadsStats);
 router.get("/leads/new", authenticate, authorizeRoles("admin"), UserController.getNewLeads);
 router.get("/leads/closed", authenticate, authorizeRoles("admin"), UserController.getClosedCustomers);
+router.get("/admin/dashboard-stats", authenticate, authorizeRoles("admin"), UserController.getAdminDashboardStats);
 
 
 
@@ -35,13 +36,15 @@ router.put("/admin/general-settings", authenticate, authorizeRoles("admin"), Use
 router.post("/admin/change-password", authenticate, authorizeRoles("admin"), UserController.changeAdminPassword);
 
 
-router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.updateUserProfile);
+// Profile Routes
+router.get("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getProfile);
+router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.updateUserProfile);
+router.get("/dashboard-stats", authenticate, authorizeRoles("customer"), UserController.getDashboardStats);
+
+router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.changeUserPassword);
 
 
-router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.changeUserPassword);
-
-
-router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "user"), UserController.getuserById);
+router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getuserById);
 
 
 router.put("/:userId", authenticate, authorizeRoles("admin"), UserController.updateUser);
@@ -50,10 +53,10 @@ router.put("/:userId", authenticate, authorizeRoles("admin"), UserController.upd
 router.delete("/:userId", authenticate, authorizeRoles("admin"), UserController.deleteUser);
 
 
-router.post("/:userId/approve-supervisor", authenticate, authorizeRoles("user"), UserController.approveSupervisor);
+router.post("/:userId/approve-supervisor", authenticate, authorizeRoles("customer"), UserController.approveSupervisor);
 
 
-router.post("/:userId/reject-supervisor", authenticate, authorizeRoles("user"), UserController.rejectSupervisor);
+router.post("/:userId/reject-supervisor", authenticate, authorizeRoles("customer"), UserController.rejectSupervisor);
 
 export default router;
 

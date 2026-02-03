@@ -17,7 +17,7 @@ async function main() {
                 data: {
                     userName: 'Default Customer',
                     email: customerEmail,
-                    role: UserRole.user,
+                    role: UserRole.customer,
                     contact: '1234567890',
                     password: await bcrypt.hash('password', 10)
                 }

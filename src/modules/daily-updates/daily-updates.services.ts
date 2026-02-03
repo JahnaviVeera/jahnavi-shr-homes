@@ -147,6 +147,24 @@ export const createDailyUpdate = async (
         await notifyAdmins(`New daily update submitted`, "daily_update");
     }
 
+    // Notify Customer
+    if (validProjectId) {
+        const project = await prisma.project.findUnique({
+            where: { projectId: validProjectId },
+            include: { customer: true }
+        });
+
+        if (project && project.customer) {
+            const customerMsg = `New daily update received for project ${project.projectName}`;
+            SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
+                type: "DAILY_UPDATE_RECEIVED",
+                message: customerMsg,
+                dailyUpdateId: newDailyUpdate.dailyUpdateId
+            });
+            await notifyUser(project.customer.userId, customerMsg, "daily_update_received");
+        }
+    }
+
     return newDailyUpdate;
 
 };
@@ -473,7 +491,40 @@ export const getDailyUpdatesForUser = async (userId: string) => {
         }
     });
 
-    return dailyUpdates;
+
+    // 3. To calculate progress efficiently, we need ALL approved updates for these projects,
+    // not just the ones for the specific user (which is all of them anyway).
+    // Let's fetch all approved updates for these projects to calculate progress.
+    const allApprovedUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: { in: projectIds },
+            status: DailyUpdateStatus.approved
+        },
+        select: {
+            projectId: true,
+            constructionStage: true
+        }
+    });
+
+    // 4. Map progress to each daily update's project
+    const updatesWithProgress = dailyUpdates.map(update => {
+        if (!update.project) return update;
+
+        const approvedForThisProject = allApprovedUpdates.filter(u => u.projectId === update.projectId);
+        const uniqueStages = new Set(approvedForThisProject.map(u => u.constructionStage));
+        const totalStages = 6; // Total stages defined in enum
+        const progress = Math.min(100, Math.round((uniqueStages.size / totalStages) * 100));
+
+        return {
+            ...update,
+            project: {
+                ...update.project,
+                progress: progress
+            }
+        };
+    });
+
+    return updatesWithProgress;
 };
 
 /**

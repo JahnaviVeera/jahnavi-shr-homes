@@ -726,6 +726,8 @@ exports.downloadDocument = async (req: MulterRequest, res: Response) => {
  *   get:
  *     summary: Get total count of documents by type
  *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
  *     description: Returns the count of documents grouped by type (Agreement, plans, permit, others) and total count
  *     responses:
  *       200:

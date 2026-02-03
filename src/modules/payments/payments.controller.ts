@@ -277,7 +277,7 @@ exports.getAllPayments = async (req: RequestWithUser, res: Response) => {
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
         }
-        else if (req.user && req.user.role === 'user') {
+        else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
         // Admins see everything, so we leave IDs as undefined
@@ -530,7 +530,7 @@ exports.getBudgetSummary = async (req: RequestWithUser, res: Response) => {
             const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
             supervisorId = supervisor.supervisorId;
         }
-        else if (req.user && req.user.role === 'user') {
+        else if (req.user && req.user.role === 'customer') {
             customerId = req.user.userId;
         }
         // Admins see everything, so we leave IDs as undefined

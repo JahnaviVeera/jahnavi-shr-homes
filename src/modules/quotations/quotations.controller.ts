@@ -1,6 +1,15 @@
 ﻿import type { Request, Response } from "express";
 
 const QuotationServices = require("./quotations.services");
+const supervisorService = require("../supervisor/supervisor.services");
+
+interface RequestWithUser extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    }
+}
 
 interface MulterRequest extends Request {
     file?: Express.Multer.File;
@@ -197,9 +206,15 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
                         }
                     }
 
-                    if (!item || typeof item !== 'object' || !item.description || typeof item.amount !== 'number') {
+                    // Handle amount as number or string (from frontend form data)
+                    const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+
+                    if (!item || typeof item !== 'object' || !item.description || typeof amount !== 'number' || isNaN(amount)) {
                         throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                     }
+
+                    // Ensure amount is stored as a number
+                    item.amount = amount;
                 }
             } catch (parseError) {
                 return res.status(400).json({
@@ -376,9 +391,21 @@ exports.getQuotationById = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // GETALL
-exports.getAllQuotations = async (req: Request, res: Response) => {
+exports.getAllQuotations = async (req: RequestWithUser, res: Response) => {
     try {
-        const quotations = await QuotationServices.getAllTheQuotations();
+        let supervisorId: string | undefined = undefined;
+        let customerId: string | undefined = undefined;
+
+        // 1. Identify User Role and related filters
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+        else if (req.user && req.user.role === 'customer') {
+            customerId = req.user.userId;
+        }
+
+        const quotations = await QuotationServices.getAllTheQuotations(supervisorId, customerId);
         return res.status(200).json({
             success: true,
             message: "Quotations fetched successfully",
@@ -579,9 +606,14 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
 
                     // Validate each item has description and amount
                     for (const item of lineItems) {
-                        if (!item.description || typeof item.amount !== 'number') {
+                        const amount = typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount;
+
+                        if (!item.description || typeof amount !== 'number' || isNaN(amount)) {
                             throw new Error("Each line item must have 'description' (string) and 'amount' (number)");
                         }
+
+                        // Ensure amount is stored as a number
+                        item.amount = amount;
                     }
                 }
 

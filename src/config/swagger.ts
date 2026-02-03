@@ -42,8 +42,8 @@ const options = {
             },
             role: {
               type: "string",
-              enum: ["admin", "user", "supervisor"],
-              example: "user",
+              enum: ["admin", "customer", "supervisor"],
+              example: "customer",
             },
             email: {
               type: "string",
@@ -279,8 +279,8 @@ const options = {
             },
             role: {
               type: "string",
-              enum: ["admin", "user", "supervisor"],
-              example: "user",
+              enum: ["admin", "customer", "supervisor"],
+              example: "customer",
             },
             email: {
               type: "string",

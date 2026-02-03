@@ -9,7 +9,41 @@ export const createMaterial = async (data: {
     notes?: string | null;
     vendor?: string | null;
 }, supervisorId?: string) => {
-    // Validate project existence and assignment if supervisorId is provided
+    // Validate required fields
+    if (!data.projectId || !data.materialName || data.quantity === undefined || !data.date) {
+        throw new Error("Missing required fields: projectId, materialName, quantity, date");
+    }
+
+    // Parse quantity to integer
+    const quantity = parseInt(String(data.quantity), 10);
+    if (isNaN(quantity)) {
+        throw new Error("Invalid quantity. Must be a valid number.");
+    }
+
+    // Ensure date is a valid Date object or string
+    let parsedDate: Date;
+    if (data.date instanceof Date) {
+        parsedDate = data.date;
+    } else {
+        // Try parsing YYYY-MM-DD (ISO) first
+        parsedDate = new Date(data.date);
+
+        // If invalid, try parsing DD-MM-YYYY
+        if (isNaN(parsedDate.getTime())) {
+            const parts = String(data.date).split("-");
+            // Check if it matches DD-MM-YYYY format (roughly)
+            if (parts.length === 3 && parts[2]?.length === 4) {
+                // Convert to YYYY-MM-DD for Date constructor
+                parsedDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            }
+        }
+    }
+
+    if (isNaN(parsedDate.getTime())) {
+        throw new Error("Invalid date format. Expected YYYY-MM-DD or DD-MM-YYYY.");
+    }
+
+    // Validate project existence and assignment
     const project = await prisma.project.findUnique({
         where: { projectId: data.projectId },
         select: { supervisorId: true }
@@ -25,18 +59,12 @@ export const createMaterial = async (data: {
         }
     }
 
-    // Ensure date is a valid Date object
-    const parsedDate = new Date(data.date);
-    if (isNaN(parsedDate.getTime())) {
-        throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
-    }
-
     const newMaterial = await prisma.material.create({
         data: {
             projectId: data.projectId,
             materialName: data.materialName,
-            quantity: data.quantity,
-            date: parsedDate,
+            quantity: quantity,
+            date: parsedDate.toISOString().split('T')[0] ?? "",
             notes: data.notes || null,
             vendor: data.vendor || null,
             createdAt: new Date(),
@@ -69,7 +97,6 @@ export const getMaterialById = async (materialId: string, supervisorId?: string)
         }
     }
 
-
     return material;
 };
 
@@ -85,10 +112,10 @@ export const getAllMaterials = async (search?: string, supervisorId?: string) =>
 
     if (search) {
         const searchFilter = [
-            { materialName: { contains: search, mode: 'insensitive' } },
-            { notes: { contains: search, mode: 'insensitive' } },
-            { vendor: { contains: search, mode: 'insensitive' } },
-            { project: { projectName: { contains: search, mode: 'insensitive' } } }
+            { materialName: { contains: search, mode: 'insensitive' as const } },
+            { notes: { contains: search, mode: 'insensitive' as const } },
+            { vendor: { contains: search, mode: 'insensitive' as const } },
+            { project: { projectName: { contains: search, mode: 'insensitive' as const } } }
         ];
 
         if (where.project) {
@@ -109,10 +136,7 @@ export const getAllMaterials = async (search?: string, supervisorId?: string) =>
         orderBy: { createdAt: "desc" }
     });
 
-    if (!materials) {
-        return [];
-    }
-    return materials;
+    return materials || [];
 };
 
 // Get materials by project ID
@@ -145,8 +169,6 @@ export const getMaterialsByProject = async (projectId: string, supervisorId?: st
 
     return materials;
 };
-
-
 
 // Get total material count by project
 export const getTotalMaterialCountByProject = async (projectId: string, supervisorId?: string) => {
@@ -189,6 +211,16 @@ export const updateMaterial = async (materialId: string, updateData: {
     vendor?: string | null;
     projectId?: string;
 }, supervisorId?: string) => {
+
+    // Parse quantity if provided
+    let quantity: number | undefined = undefined;
+    if (updateData.quantity !== undefined) {
+        quantity = parseInt(String(updateData.quantity), 10);
+        if (isNaN(quantity)) {
+            throw new Error("Invalid quantity. Must be a valid number.");
+        }
+    }
+
     const material = await prisma.material.findUnique({
         where: { materialId },
         include: { project: true }
@@ -229,16 +261,31 @@ export const updateMaterial = async (materialId: string, updateData: {
         dataToUpdate.materialName = updateData.materialName;
     }
 
-    if (updateData.quantity !== undefined) {
-        dataToUpdate.quantity = updateData.quantity;
+    if (quantity !== undefined) {
+        dataToUpdate.quantity = quantity;
     }
 
     if (updateData.date !== undefined) {
-        const parsedDate = new Date(updateData.date);
-        if (isNaN(parsedDate.getTime())) {
-            throw new Error("Invalid date format. Expected ISO-8601 DateTime string.");
+        let parsedDate: Date;
+        if (updateData.date instanceof Date) {
+            parsedDate = updateData.date;
+        } else {
+            // Try parsing YYYY-MM-DD first
+            parsedDate = new Date(updateData.date);
+
+            // If invalid, try parsing DD-MM-YYYY
+            if (isNaN(parsedDate.getTime())) {
+                const parts = String(updateData.date).split("-");
+                if (parts.length === 3 && parts[2]?.length === 4) {
+                    parsedDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                }
+            }
         }
-        dataToUpdate.date = parsedDate;
+
+        if (isNaN(parsedDate.getTime())) {
+            throw new Error("Invalid date format. Expected YYYY-MM-DD or DD-MM-YYYY.");
+        }
+        dataToUpdate.date = parsedDate.toISOString().split('T')[0];
     }
 
     if (updateData.notes !== undefined) {

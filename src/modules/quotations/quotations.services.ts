@@ -69,19 +69,25 @@ export const createQuotation = async (data:
         userIdToUse = projectExists.customer.userId;
     }
 
+    let dateString: string | null = null;
+    if (data.date) {
+        dateString = (data.date instanceof Date ? data.date : new Date(data.date)).toISOString().split('T')[0] ?? "";
+    }
+
     const newQuotation = await prisma.quotation.create({
         data: {
             totalAmount: finalTotalAmount,
             status: data.status as QuotationStatus,
             lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
-            date: data.date || null,
+            date: dateString,
             projectId: data.projectId,
-            userId: userIdToUse || null,
-            customerName: data.customerName || null,
+            userId: userIdToUse ?? null,
+            customerName: data.customerName ?? null,
             fileData: null,
             fileName: file ? file.originalname : null,
             fileType: file ? file.mimetype : null,
-            fileUrl: fileUrl,
+            fileUrl: fileUrl ?? null,
+            fileId: (data as any).fileId ?? null,
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -89,11 +95,13 @@ export const createQuotation = async (data:
 
     // Notify Customer
     if (userIdToUse) {
+        const msg = `New quotation received for project ${projectExists.projectName}`;
         SocketService.getInstance().emitToUser(userIdToUse, "notification", {
             type: "QUOTATION_RECEIVED",
-            message: `New quotation received for project ${projectExists.projectName}`,
+            message: msg,
             quotationId: newQuotation.quotationId
         });
+        await notifyUser(userIdToUse, msg, "quotation_received");
     }
 
     return newQuotation;
@@ -128,7 +136,7 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         customerName: quotation.customerName || customer?.userName || null,
         customerEmail: customer?.email || null,
         status: quotation.status,
-        date: quotation.date ? new Date(quotation.date).toISOString().split('T')[0] : null,
+        date: quotation.date || null,
         lineItems: quotation.lineItems || [],
         totalAmount: parseFloat(String(quotation.totalAmount || 0)),
         fileName: quotation.fileName || null,
@@ -141,7 +149,67 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
 };
 
 
-// ... (get functions)
+// Get all quotations
+export const getAllTheQuotations = async (supervisorId?: string, customerId?: string) => {
+    const where: Prisma.QuotationWhereInput = {};
+
+    if (supervisorId) {
+        where.project = {
+            supervisorId: supervisorId
+        };
+    } else if (customerId) {
+        where.userId = customerId;
+    }
+
+    const quotations = await prisma.quotation.findMany({
+        where,
+        include: { project: { include: { customer: true } }, user: true },
+        orderBy: { createdAt: "desc" }
+    });
+
+    if (!quotations || quotations.length === 0) {
+        return [];
+    }
+
+    return quotations.map((quotation: any, index: number) => formatQuotationResponse(quotation, index));
+};
+
+// Get quotation by ID
+export const getQuotationByQuotationId = async (quotationId: string) => {
+    if (!quotationId) {
+        throw new Error("Quotation ID is required");
+    }
+
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        include: { project: { include: { customer: true } }, user: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return formatQuotationResponse(quotation);
+};
+
+// Get quotation total amount
+export const getQuotationTotalAmount = async (quotationId: string) => {
+    if (!quotationId) {
+        throw new Error("Quotation ID is required");
+    }
+
+    const quotation = await prisma.quotation.findUnique({
+        where: { quotationId },
+        select: { totalAmount: true }
+    });
+
+    if (!quotation) {
+        throw new Error("Quotation not found");
+    }
+
+    return quotation.totalAmount;
+};
+
 
 // Update quotation
 export const updateQuotation = async (quotationId: string, updateData: {
@@ -192,7 +260,11 @@ export const updateQuotation = async (quotationId: string, updateData: {
     }
 
     if (updateData.date !== undefined) {
-        dataToUpdate.date = updateData.date;
+        let dateString: string | null = null;
+        if (updateData.date) {
+            dateString = (updateData.date instanceof Date ? updateData.date : new Date(updateData.date)).toISOString().split('T')[0] ?? "";
+        }
+        dataToUpdate.date = dateString;
     }
 
     if (updateData.projectId !== undefined) {
@@ -236,11 +308,13 @@ export const updateQuotation = async (quotationId: string, updateData: {
     const targetUserId = updatedQuotation.userId || updatedQuotation.project?.customer?.userId;
 
     if (targetUserId) {
+        const msg = `Quotation updated for project ${updatedQuotation.project?.projectName}`;
         SocketService.getInstance().emitToUser(targetUserId, "notification", {
             type: "QUOTATION_UPDATED",
-            message: `Quotation updated for project ${updatedQuotation.project?.projectName}`,
+            message: msg,
             quotationId: updatedQuotation.quotationId
         });
+        await notifyUser(targetUserId, msg, "quotation_updated");
     }
 
     return updatedQuotation;

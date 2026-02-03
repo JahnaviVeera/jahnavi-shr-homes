@@ -93,11 +93,11 @@ export const adminLogin = async (req: Request, res: Response, next: NextFunction
  *               email:
  *                 type: string
  *                 format: email
- *                 example: "user@example.com"
+ *                 example: "customer@example.com"
  *               password:
  *                 type: string
  *                 format: password
- *                 example: "user123"
+ *                 example: "customer123"
  *     responses:
  *       200:
  *         description: Login successful
@@ -117,7 +117,7 @@ export const adminLogin = async (req: Request, res: Response, next: NextFunction
  *                   type: string
  *                 role:
  *                   type: string
- *                   example: "user"
+ *                   example: "customer"
  *                 userId:
  *                   type: string
  *                   format: uuid
