@@ -33,6 +33,29 @@ const ProjectServices = require("./project.services");
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *     x-codeSamples:
+ *       - lang: JSON
+ *         label: Payload
+ *         source: |
+ *           {
+ *             "projectName": "Sunrise Villa",
+ *             "projectType": "villa",
+ *             "location": "City, State",
+ *             "initialStatus": "Planning",
+ *             "startDate": "2024-01-01",
+ *             "expectedCompletion": "2024-12-31",
+ *             "totalBudget": 5000000,
+ *             "materialName": "Concrete",
+ *             "quantity": 100,
+ *             "customerId": "uuid",
+ *             "supervisorId": "uuid",
+ *             "projectManager": "John Doe",
+ *             "area": "1500 Sqft",
+ *             "numberOfFloors": 2,
+ *             "priority": "Medium",
+ *             "currency": "INR",
+ *             "description": "Project details..."
+ *           }
  */
 
 

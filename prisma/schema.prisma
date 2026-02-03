@@ -189,6 +189,13 @@ model Project {
   materialName       String        @db.VarChar(255)
   quantity           Int
   notes              String        @db.Text
+  projectManager     String?       @map("project_manager") @db.VarChar(255)
+  area               String?       @map("area") @db.VarChar(100)
+  numberOfFloors     Int?          @map("number_of_floors")
+  priority           String?       @default("Medium") @db.VarChar(50)
+  currency           String?       @default("INR") @db.VarChar(20)
+  description        String?       @db.Text
+
 
   // New Fields Matching UI
   customerId String @db.Uuid

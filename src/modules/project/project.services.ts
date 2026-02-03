@@ -8,7 +8,7 @@ const formatDateString = (dateInput: string | Date | undefined | null): string =
     if (isNaN(date.getTime())) {
         throw new Error(`Invalid date format: ${dateInput}`);
     }
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split('T')[0] ?? "";
 };
 
 import SocketService from "../../services/socket.service";
@@ -28,6 +28,14 @@ export const createProject = async (data:
         notes?: string,
         customerId: string | null,
         supervisorId: string | null,
+        // New fields
+        projectManager?: string,
+        area?: string,
+        numberOfFloors?: number,
+        priority?: string,
+        currency?: string,
+        description?: string,
+
         createdAt?: Date,
         updatedAt?: Date
     }) => {
@@ -97,6 +105,14 @@ export const createProject = async (data:
             notes: data.notes || "",
             customerId: data.customerId as string,
             supervisorId: data.supervisorId,
+
+            projectManager: data.projectManager || null,
+            area: data.area || null,
+            numberOfFloors: data.numberOfFloors || null,
+            priority: data.priority || "Medium",
+            currency: data.currency || "INR",
+            description: data.description || "",
+
             createdAt: new Date(),
             updatedAt: new Date(),
         }
@@ -188,6 +204,15 @@ export const updateProject = async (projectId: string, updateData: {
     notes?: string,
     customerId?: string,
     supervisorId?: string | null,
+
+    // New fields
+    projectManager?: string,
+    area?: string,
+    numberOfFloors?: number,
+    priority?: string,
+    currency?: string,
+    description?: string,
+
     updatedAt?: Date
 } | undefined | null) => {
     // Check if updateData is provided
@@ -232,7 +257,16 @@ export const updateProject = async (projectId: string, updateData: {
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
+    if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
     if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
+
+    // New fields
+    if (updateData.projectManager !== undefined) dataToUpdate.projectManager = updateData.projectManager;
+    if (updateData.area !== undefined) dataToUpdate.area = updateData.area;
+    if (updateData.numberOfFloors !== undefined) dataToUpdate.numberOfFloors = updateData.numberOfFloors;
+    if (updateData.priority !== undefined) dataToUpdate.priority = updateData.priority;
+    if (updateData.currency !== undefined) dataToUpdate.currency = updateData.currency;
+    if (updateData.description !== undefined) dataToUpdate.description = updateData.description;
 
     if (updateData.customerId !== undefined) {
         // Validate Customer
