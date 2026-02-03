@@ -43,7 +43,7 @@ export const createExpense = async (data: {
     if (isNaN(expenseDate.getTime())) {
         throw new Error("Invalid date format. Expected ISO-8601 Date string.");
     }
-    const dateString = expenseDate.toISOString().split('T')[0];
+    const dateString = expenseDate.toISOString().split('T')[0] ?? "";
 
     const newExpense = await prisma.expense.create({
         data: {
@@ -227,7 +227,7 @@ export const updateExpense = async (expenseId: string, updateData: {
         if (isNaN(parsedDate.getTime())) {
             throw new Error("Invalid date format. Expected ISO-8601 Date string.");
         }
-        dataToUpdate.date = parsedDate.toISOString().split('T')[0];
+        dataToUpdate.date = parsedDate.toISOString().split('T')[0] ?? "";
     }
 
     if (updateData.description !== undefined) {

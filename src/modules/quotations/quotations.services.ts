@@ -71,7 +71,7 @@ export const createQuotation = async (data:
 
     let dateString: string | null = null;
     if (data.date) {
-        dateString = (data.date instanceof Date ? data.date : new Date(data.date)).toISOString().split('T')[0];
+        dateString = (data.date instanceof Date ? data.date : new Date(data.date)).toISOString().split('T')[0] ?? "";
     }
 
     const newQuotation = await prisma.quotation.create({
@@ -262,7 +262,7 @@ export const updateQuotation = async (quotationId: string, updateData: {
     if (updateData.date !== undefined) {
         let dateString: string | null = null;
         if (updateData.date) {
-            dateString = (updateData.date instanceof Date ? updateData.date : new Date(updateData.date)).toISOString().split('T')[0];
+            dateString = (updateData.date instanceof Date ? updateData.date : new Date(updateData.date)).toISOString().split('T')[0] ?? "";
         }
         dataToUpdate.date = dateString;
     }

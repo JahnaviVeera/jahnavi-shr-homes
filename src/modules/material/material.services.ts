@@ -32,7 +32,7 @@ export const createMaterial = async (data: {
         if (isNaN(parsedDate.getTime())) {
             const parts = String(data.date).split("-");
             // Check if it matches DD-MM-YYYY format (roughly)
-            if (parts.length === 3 && parts[2].length === 4) {
+            if (parts.length === 3 && parts[2]?.length === 4) {
                 // Convert to YYYY-MM-DD for Date constructor
                 parsedDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
             }
@@ -64,7 +64,7 @@ export const createMaterial = async (data: {
             projectId: data.projectId,
             materialName: data.materialName,
             quantity: quantity,
-            date: parsedDate.toISOString().split('T')[0],
+            date: parsedDate.toISOString().split('T')[0] ?? "",
             notes: data.notes || null,
             vendor: data.vendor || null,
             createdAt: new Date(),
@@ -276,7 +276,7 @@ export const updateMaterial = async (materialId: string, updateData: {
             // If invalid, try parsing DD-MM-YYYY
             if (isNaN(parsedDate.getTime())) {
                 const parts = String(updateData.date).split("-");
-                if (parts.length === 3 && parts[2].length === 4) {
+                if (parts.length === 3 && parts[2]?.length === 4) {
                     parsedDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
                 }
             }

@@ -102,7 +102,7 @@ export const createPayment = async (data: {
             paymentType: pType,
             paymentMethod: pMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
-            paymentDate: new Date(data.paymentDate).toISOString().split('T')[0],
+            paymentDate: new Date(data.paymentDate).toISOString().split('T')[0] ?? "",
             remarks: data.remarks || null,
             fileUrl: fileUrl,
             fileId: fileId,
@@ -233,7 +233,7 @@ export const updatePayment = async (paymentId: string, updateData: {
     if (updateData.paymentType !== undefined) dataToUpdate.paymentType = pType;
     if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = normalizePaymentMethod(updateData.paymentMethod);
     if (parsedBreakup !== undefined) dataToUpdate.paymentBreakup = JSON.stringify(parsedBreakup);
-    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate).toISOString().split('T')[0];
+    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate).toISOString().split('T')[0] ?? "";
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
 
     // Handle file update if provided
