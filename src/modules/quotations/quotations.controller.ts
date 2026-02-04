@@ -269,6 +269,8 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
  *   get:
  *     summary: Get a quotation by ID
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId
@@ -341,6 +343,8 @@ exports.getQuotationById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all quotations
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Quotations fetched successfully

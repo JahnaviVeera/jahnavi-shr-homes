@@ -67,6 +67,12 @@ export const getUserById = async (userId: string) => {
         throw new Error("User ID required");
     }
 
+    // Validate UUID format to prevent malformed requests (e.g. "getallusers") from crashing Prisma
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+        throw new Error("Invalid User ID format");
+    }
+
     const user = await prisma.user.findUnique({
         where: { userId },
         select: {

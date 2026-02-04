@@ -54,7 +54,8 @@ const ProjectServices = require("./project.services");
  *             "numberOfFloors": 2,
  *             "priority": "Medium",
  *             "currency": "INR",
- *             "description": "Project details..."
+ *             "description": "Project details...",
+ *             "progress": 0
  *           }
  */
 
@@ -347,6 +348,8 @@ exports.deleteProject = async (req: Request, res: Response) => {
  *                           type: number
  *                         supervisorName:
  *                           type: string
+ *                         progress:
+ *                           type: number
  *       404:
  *         description: No project found for this user
  */
