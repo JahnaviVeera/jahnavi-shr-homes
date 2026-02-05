@@ -170,6 +170,7 @@ export const getAllTheProjects = async (search?: string) => {
         include: {
             customer: true,
             supervisor: true, // Also useful to have supervisor details often
+            materials: true,
             dailyUpdates: {
                 where: { status: DailyUpdateStatus.approved },
                 select: { constructionStage: true }
@@ -365,9 +366,36 @@ export const getProjectById = getProjectByProjectId;
  * @returns List of projects
  */
 export const getProjectsByCustomerId = async (customerId: string) => {
-    return prisma.project.findMany({
+    const projects = await prisma.project.findMany({
         where: { customerId },
-        select: { projectId: true, projectName: true, location: true }
+        select: {
+            projectId: true,
+            projectName: true,
+            location: true,
+            progress: true,
+            totalBudget: true,
+            expenses: {
+                select: {
+                    amount: true
+                }
+            }
+        }
+    });
+
+    return projects.map((project) => {
+        const totalExpense = project.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+        const totalBudget = Number(project.totalBudget);
+        const totalBudgetUsed = totalBudget > 0 ? Math.round((totalExpense / totalBudget) * 100) : 0;
+
+        return {
+            projectId: project.projectId,
+            projectName: project.projectName,
+            location: project.location,
+            totalProgress: project.progress,
+            totalBudget: project.totalBudget,
+            totalExpense: totalExpense,
+            totalBudgetUsed: totalBudgetUsed
+        };
     });
 };
 

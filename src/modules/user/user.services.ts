@@ -1,6 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
-import { UserRole, Prisma } from "@prisma/client";
+import { UserRole, Prisma, Timezone, Currency, Language } from "@prisma/client";
 import * as projectService from "../project/project.services";
 
 // Create a new user
@@ -38,7 +38,7 @@ export const createUser = async (data: {
 
     const userData: Prisma.UserCreateInput = {
         userName: data.userName,
-        role: data.role as UserRole,
+        role: (data.role === "user" ? UserRole.customer : data.role) as UserRole,
         email: data.email,
         password: hashedPassword,
         contact: data.contact,
@@ -46,9 +46,15 @@ export const createUser = async (data: {
         notes: data.notes || null,
         companyName: data.companyName || null,
 
-        timezone: data.timezone || "UTC",
-        currency: data.currency || "USD",
-        language: data.language || "English",
+        timezone: (data.timezone === "Eastern Time (ET)" ? Timezone.ET :
+            data.timezone === "Central Time (CT)" ? Timezone.CT :
+                data.timezone === "Mountain Time (MT)" ? Timezone.MT :
+                    data.timezone === "Pacific Time (PT)" ? Timezone.PT :
+                        data.timezone === "UTC" ? Timezone.UTC : Timezone.UTC),
+        currency: (data.currency === "USD ($)" ? Currency.USD :
+            data.currency === "EUR (€)" ? Currency.EUR :
+                data.currency === "GBP (£)" ? Currency.GBP : Currency.USD),
+        language: (data.language as Language) || Language.English,
         address: data.address || null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -171,7 +177,7 @@ export const updateUser = async (userId: string, updatedUserData: {
 
     // Only update fields that are provided
     if (updatedUserData.userName !== undefined) dataToUpdate.userName = updatedUserData.userName;
-    if (updatedUserData.role !== undefined) dataToUpdate.role = updatedUserData.role as UserRole;
+    if (updatedUserData.role !== undefined) dataToUpdate.role = (updatedUserData.role === "user" ? UserRole.customer : updatedUserData.role) as UserRole;
     if (updatedUserData.email !== undefined) dataToUpdate.email = updatedUserData.email;
     if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
@@ -179,9 +185,41 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
 
     // General Settings
-    if (updatedUserData.timezone !== undefined) dataToUpdate.timezone = updatedUserData.timezone;
-    if (updatedUserData.currency !== undefined) dataToUpdate.currency = updatedUserData.currency;
-    if (updatedUserData.language !== undefined) dataToUpdate.language = updatedUserData.language;
+    if (updatedUserData.timezone !== undefined) {
+        let tzValue: any = updatedUserData.timezone;
+        // Map Display String to Enum Key if necessary
+        const timeZoneMap: Record<string, any> = {
+            "Eastern Time (ET)": Timezone.ET,
+            "Central Time (CT)": Timezone.CT,
+            "Mountain Time (MT)": Timezone.MT,
+            "Pacific Time (PT)": Timezone.PT,
+            "UTC": Timezone.UTC
+        };
+        if (timeZoneMap[tzValue]) {
+            tzValue = timeZoneMap[tzValue];
+        }
+        dataToUpdate.timezone = tzValue as Timezone;
+    }
+
+    if (updatedUserData.currency !== undefined) {
+        let currValue: any = updatedUserData.currency;
+        const currencyMap: Record<string, any> = {
+            "USD ($)": Currency.USD,
+            "EUR (€)": Currency.EUR,
+            "GBP (£)": Currency.GBP,
+            "USD": Currency.USD // Handle simpler cases too
+        };
+        if (currencyMap[currValue]) {
+            currValue = currencyMap[currValue];
+        }
+        dataToUpdate.currency = currValue as Currency;
+    }
+
+    if (updatedUserData.language !== undefined) {
+        // Enums match strings mostly, but good to cast safely
+        dataToUpdate.language = updatedUserData.language as Language;
+    }
+
     if (updatedUserData.address !== undefined) dataToUpdate.address = updatedUserData.address;
 
 
