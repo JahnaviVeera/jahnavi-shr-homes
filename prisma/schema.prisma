@@ -20,11 +20,11 @@ enum UserRole {
 }
 
 enum ProjectType {
-  Villa
-  Apartment
-  Residential
-  Commercial
-  Industrial
+  villa
+  apartment
+  residential
+  commercial
+  industrial
 
   @@map("projects_projecttype_enum")
 }
