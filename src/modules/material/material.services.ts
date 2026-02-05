@@ -330,3 +330,30 @@ export const deleteMaterial = async (materialId: string, supervisorId?: string) 
     });
     return { success: true, message: "Material deleted successfully" };
 };
+
+// Get materials for logged-in supervisor
+export const getMaterialsBySupervisorId = async (supervisorId: string) => {
+    // Fetch projects assigned to this supervisor with their materials
+    const projects = await prisma.project.findMany({
+        where: { supervisorId },
+        select: {
+            projectId: true,
+            projectName: true,
+            projectType: true,
+            location: true,
+            materials: {
+                orderBy: { createdAt: 'desc' }
+            }
+        }
+    });
+
+    // Format the response
+    return projects.map(project => ({
+        projectId: project.projectId,
+        projectName: project.projectName,
+        projectType: project.projectType,
+        location: project.location,
+        totalMaterials: project.materials.length,
+        materials: project.materials
+    }));
+};

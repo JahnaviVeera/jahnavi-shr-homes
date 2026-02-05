@@ -20,9 +20,13 @@ enum UserRole {
 }
 
 enum ProjectType {
-  villa
-  apartment
-  building
+  Villa
+  Apartment
+  Residential
+  Commercial
+  Industrial
+
+  @@map("projects_projecttype_enum")
 }
 
 enum ProjectStatus {
@@ -54,9 +58,11 @@ enum DailyUpdateStatus {
 
 enum DocumentType {
   Agreement
-  plans
-  permit
-  others
+  Plans
+  Permit
+  Other
+
+  @@map("documents_documenttype_enum")
 }
 
 enum ExpenseCategory {

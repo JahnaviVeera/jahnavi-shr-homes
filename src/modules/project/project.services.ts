@@ -34,7 +34,9 @@ export const createProject = async (data:
         numberOfFloors?: number,
         priority?: string,
         currency?: string,
+
         description?: string,
+        progress?: number,
 
         createdAt?: Date,
         updatedAt?: Date
@@ -112,6 +114,7 @@ export const createProject = async (data:
             priority: data.priority || "Medium",
             currency: data.currency || "INR",
             description: data.description || "",
+            progress: data.progress || 0,
 
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -167,6 +170,7 @@ export const getAllTheProjects = async (search?: string) => {
         include: {
             customer: true,
             supervisor: true, // Also useful to have supervisor details often
+            materials: true,
             dailyUpdates: {
                 where: { status: DailyUpdateStatus.approved },
                 select: { constructionStage: true }
@@ -175,18 +179,10 @@ export const getAllTheProjects = async (search?: string) => {
     });
 
     return projects.map(project => {
-        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
-        const totalStages = 6;
-        const progress = Math.min(100, Math.round((uniqueStages.size / totalStages) * 100));
-
-        // Exclude the big dailyUpdates array from the final response to keep it clean, 
-        // or keep it if needed. The user just asked to INCLUDE percentage. 
-        // I'll strip dailyUpdates to avoid clutter since we only fetched it for calculation.
+        // Exclude the big dailyUpdates array from the final response to keep it clean.
+        // We now use the stored 'progress' field from the database instead of calculating it.
         const { dailyUpdates, ...rest } = project;
-        return {
-            ...rest,
-            progress
-        };
+        return rest;
     });
 };
 
@@ -211,7 +207,9 @@ export const updateProject = async (projectId: string, updateData: {
     numberOfFloors?: number,
     priority?: string,
     currency?: string,
+
     description?: string,
+    progress?: number,
 
     updatedAt?: Date
 } | undefined | null) => {
@@ -267,6 +265,7 @@ export const updateProject = async (projectId: string, updateData: {
     if (updateData.priority !== undefined) dataToUpdate.priority = updateData.priority;
     if (updateData.currency !== undefined) dataToUpdate.currency = updateData.currency;
     if (updateData.description !== undefined) dataToUpdate.description = updateData.description;
+    if (updateData.progress !== undefined) dataToUpdate.progress = updateData.progress;
 
     if (updateData.customerId !== undefined) {
         // Validate Customer
@@ -367,9 +366,36 @@ export const getProjectById = getProjectByProjectId;
  * @returns List of projects
  */
 export const getProjectsByCustomerId = async (customerId: string) => {
-    return prisma.project.findMany({
+    const projects = await prisma.project.findMany({
         where: { customerId },
-        select: { projectId: true, projectName: true, location: true }
+        select: {
+            projectId: true,
+            projectName: true,
+            location: true,
+            progress: true,
+            totalBudget: true,
+            expenses: {
+                select: {
+                    amount: true
+                }
+            }
+        }
+    });
+
+    return projects.map((project) => {
+        const totalExpense = project.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+        const totalBudget = Number(project.totalBudget);
+        const totalBudgetUsed = totalBudget > 0 ? Math.round((totalExpense / totalBudget) * 100) : 0;
+
+        return {
+            projectId: project.projectId,
+            projectName: project.projectName,
+            location: project.location,
+            totalProgress: project.progress,
+            totalBudget: project.totalBudget,
+            totalExpense: totalExpense,
+            totalBudgetUsed: totalBudgetUsed
+        };
     });
 };
 
@@ -460,6 +486,7 @@ export const getProjectSummaryForUser = async (userId: string) => {
         totalBudget: project.totalBudget,
         supervisorName: project.supervisor?.fullName || "Not Assigned",
         supervisorContact: project.supervisor?.phoneNumber || "",
-        supervisorEmail: project.supervisor?.email || ""
+        supervisorEmail: project.supervisor?.email || "",
+        progress: project.progress || 0
     };
 };

@@ -906,14 +906,17 @@ exports.getAdminGeneralSettings = async (req: AuthRequest, res: Response) => {
  *             properties:
  *               timezone:
  *                 type: string
+ *                 enum: ["Eastern Time (ET)", "Central Time (CT)", "Mountain Time (MT)", "Pacific Time (PT)", "UTC"]
  *                 example: "Eastern Time (ET)"
  *                 description: "Timezone preference for the admin"
  *               currency:
  *                 type: string
+ *                 enum: ["USD ($)", "EUR (€)", "GBP (£)"]
  *                 example: "USD ($)"
  *                 description: "Currency preference for the admin"
  *               language:
  *                 type: string
+ *                 enum: ["English", "Spanish", "French"]
  *                 example: "English"
  *                 description: "Language preference for the admin"
  *     responses:

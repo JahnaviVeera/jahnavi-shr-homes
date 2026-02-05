@@ -18,6 +18,10 @@ router.get("/project/:projectId/total-count", authenticate, authorizeRoles("admi
 
 // Get all materials
 router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer"), MaterialController.getAllMaterials);
+router.get("/getallmaterials", authenticate, authorizeRoles("admin", "supervisor", "customer"), MaterialController.getAllMaterials);
+
+// Get materials for logged-in supervisor
+router.get("/supervisor/materials", authenticate, authorizeRoles("supervisor"), MaterialController.getSupervisorMaterials);
 
 // Create a new material (Admin and Supervisor)
 // Prompt says Admin: "materials usage ... admin should only can create"

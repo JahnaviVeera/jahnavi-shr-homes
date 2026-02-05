@@ -269,6 +269,8 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
  *   get:
  *     summary: Get a quotation by ID
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: quotationId
@@ -341,6 +343,8 @@ exports.getQuotationById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all quotations
  *     tags: [Quotations]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Quotations fetched successfully
@@ -953,6 +957,7 @@ exports.getQuotationsByProject = async (req: Request, res: Response) => {
 exports.approveQuotation = async (req: Request, res: Response) => {
     try {
         const quotationId = req.params.quotationId as string;
+        const feedback = req.body?.feedback;
 
         // Get user ID from authentication middleware
         const userId = (req as any).user?.userId;
@@ -964,7 +969,7 @@ exports.approveQuotation = async (req: Request, res: Response) => {
             });
         }
 
-        const updatedQuotation = await QuotationServices.approveQuotation(quotationId, userId);
+        const updatedQuotation = await QuotationServices.approveQuotation(quotationId, userId, feedback);
 
         return res.status(200).json({
             success: true,
@@ -1022,6 +1027,7 @@ exports.approveQuotation = async (req: Request, res: Response) => {
 exports.rejectQuotation = async (req: Request, res: Response) => {
     try {
         const quotationId = req.params.quotationId as string;
+        const feedback = req.body?.feedback;
 
         // Get user ID from authentication middleware
         const userId = (req as any).user?.userId;
@@ -1033,7 +1039,7 @@ exports.rejectQuotation = async (req: Request, res: Response) => {
             });
         }
 
-        const updatedQuotation = await QuotationServices.rejectQuotation(quotationId, userId);
+        const updatedQuotation = await QuotationServices.rejectQuotation(quotationId, userId, feedback);
 
         return res.status(200).json({
             success: true,

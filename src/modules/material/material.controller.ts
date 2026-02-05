@@ -391,3 +391,71 @@ exports.deleteMaterial = async (req: AuthenticatedRequest, res: Response) => {
 };
 
 
+
+/**
+ * @swagger
+ * /api/material/supervisor/materials:
+ *   get:
+ *     summary: Get all materials for projects assigned to the logged-in supervisor
+ *     tags: [Materials]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Materials fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           projectId:
+ *                             type: string
+ *                           projectName:
+ *                             type: string
+ *                           projectType:
+ *                             type: string
+ *                           location:
+ *                             type: string
+ *                           totalMaterials:
+ *                             type: integer
+ *                           materials:
+ *                             type: array 
+ *                             items:
+ *                               $ref: '#/components/schemas/Material'
+ *       403:
+ *         description: Forbidden - Supervisor access required
+ */
+exports.getSupervisorMaterials = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        // Ensure user is a supervisor
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Supervisor privileges required."
+            });
+        }
+
+        // Get supervisor ID
+        const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+
+        const data = await MaterialServices.getMaterialsBySupervisorId(supervisor.supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor materials fetched successfully",
+            data: data
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};

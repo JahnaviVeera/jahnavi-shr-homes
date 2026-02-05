@@ -18,11 +18,10 @@ export const createMessage = async (data: {
         throw new Error("Sender and Receiver IDs are required");
     }
 
-    // Role-based restriction: Customers can only reply (must have parentId)
-    // Assuming 'user' role is for customers.
-    if (data.senderRole === 'user' && !data.parentId) {
-        throw new Error("Customers can only reply to existing messages initiated by supervisors.");
-    }
+    // Role-based restriction removed to allow customers to initiate messages
+    // if (data.senderRole === 'user' && !data.parentId) {
+    //     throw new Error("Customers can only reply to existing messages initiated by supervisors.");
+    // }
 
     const createData: any = {
         subject: data.subject || null,

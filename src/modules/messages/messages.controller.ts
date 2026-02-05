@@ -75,6 +75,69 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
             senderId = user.userId;
         }
 
+        // Logic for Customer (user role) sending new message (no receiverId generally expected from UI, or ignored)
+        // We need to send to BOTH Admin and Supervisor
+        if (req.user.role === 'customer' || req.user.role === 'user') {
+            // If it's a reply (has parentId), standard logic applies (receiver is already determined by parent)
+            // Only apply dual-send if it is a NEW message (no parentId)
+            if (!parentId) {
+                if (!projectId) {
+                    return res.status(400).json({ success: false, message: "Project ID is required for sending new messages." });
+                }
+
+                // 1. Get Admin ID
+                const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+                if (!admin) {
+                    return res.status(500).json({ success: false, message: "Admin not found to forward message." });
+                }
+
+                // 2. Get Supervisor's User ID from Project
+                const project = await prisma.project.findUnique({
+                    where: { projectId },
+                    select: {
+                        supervisor: {
+                            select: { userId: true }
+                        }
+                    }
+                });
+
+                if (!project) {
+                    return res.status(404).json({ success: false, message: "Project not found." });
+                }
+
+                // 3. Send to Admin
+                const msgToAdmin = await MessageServices.createMessage({
+                    subject,
+                    message,
+                    senderId,
+                    senderRole: req.user.role,
+                    receiverId: admin.userId,
+                    projectId,
+                    parentId: null
+                });
+
+                // 4. Send to Supervisor (if exists)
+                if (project.supervisor?.userId) {
+                    await MessageServices.createMessage({
+                        subject,
+                        message,
+                        senderId,
+                        senderRole: req.user.role,
+                        receiverId: project.supervisor.userId,
+                        projectId,
+                        parentId: null
+                    });
+                }
+
+                return res.status(201).json({
+                    success: true,
+                    message: "Message sent to Admin and Supervisor successfully",
+                    data: msgToAdmin // Return one of them as response
+                });
+            }
+        }
+
+        // Default logic for non-customers or replies
         const newMessage = await MessageServices.createMessage({
             subject,
             message,

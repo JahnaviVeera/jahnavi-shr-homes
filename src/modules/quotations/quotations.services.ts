@@ -407,15 +407,22 @@ export const getQuotationsByProject = async (projectId: string) => {
  * @param quotationId - The quotation ID to approve
  * @param userId - The user ID who is approving
  */
-export const approveQuotation = async (quotationId: string, userId: string) => {
+// Approve a quotation (User only)
+export const approveQuotation = async (quotationId: string, userId: string, feedback?: string | null) => {
     // Find the quotation
     const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        include: { project: true }
+        include: { project: { include: { customer: true } }, user: true }
     });
 
     if (!quotation) {
         throw new Error("Quotation not found");
+    }
+
+    // Check ownership
+    const isOwner = quotation.userId === userId || quotation.project?.customer?.userId === userId;
+    if (!isOwner) {
+        throw new Error("Unauthorized: You can only approve your own quotations");
     }
 
     // Check if quotation is already approved
@@ -443,6 +450,7 @@ export const approveQuotation = async (quotationId: string, userId: string) => {
         where: { quotationId },
         data: {
             status: QuotationStatus.approved,
+            feedback: feedback ?? null,
             updatedAt: new Date(),
         }
     });
@@ -460,17 +468,22 @@ export const approveQuotation = async (quotationId: string, userId: string) => {
     // Notify Admins
     try {
         const projectName = updatedQuotation.project?.projectName || "Unknown Project";
-        // Prefer explicit relation if loaded, otherwise try nested project.customer
         const customer = updatedQuotation.user || updatedQuotation.project?.customer;
         const userName = customer?.userName || "Customer";
 
+        let notifMessage = `Quotation for ${projectName} has been APPROVED by ${userName}`;
+        if (feedback) {
+            notifMessage += `. Feedback: ${feedback}`;
+        }
+
         SocketService.getInstance().emitToRole("admin", "quotation_status", {
             status: "APPROVED",
-            message: `Quotation for ${projectName} has been APPROVED by ${userName}`,
-            quotationId: updatedQuotation.quotationId
+            message: notifMessage,
+            quotationId: updatedQuotation.quotationId,
+            feedback: feedback
         });
 
-        await notifyAdmins(`Quotation for ${projectName} has been APPROVED by ${userName}`, "quotation_approval");
+        await notifyAdmins(notifMessage, "quotation_approval");
     } catch (error) {
         console.error("Failed to send notification:", error);
     }
@@ -485,14 +498,21 @@ export const approveQuotation = async (quotationId: string, userId: string) => {
  * @param quotationId - The quotation ID to reject
  * @param userId - The user ID who is rejecting
  */
-export const rejectQuotation = async (quotationId: string, userId: string) => {
+// Reject a quotation (User only)
+export const rejectQuotation = async (quotationId: string, userId: string, feedback?: string | null) => {
     const quotation = await prisma.quotation.findUnique({
         where: { quotationId },
-        include: { project: true }
+        include: { project: { include: { customer: true } }, user: true }
     });
 
     if (!quotation) {
         throw new Error("Quotation not found");
+    }
+
+    // Check ownership
+    const isOwner = quotation.userId === userId || quotation.project?.customer?.userId === userId;
+    if (!isOwner) {
+        throw new Error("Unauthorized: You can only reject your own quotations");
     }
 
     // Check if quotation is already approved
@@ -511,11 +531,11 @@ export const rejectQuotation = async (quotationId: string, userId: string) => {
     }
 
     // Reject the quotation
-    // This allows admin to resubmit the quotation later
     await prisma.quotation.update({
         where: { quotationId },
         data: {
             status: QuotationStatus.rejected,
+            feedback: feedback ?? null,
             updatedAt: new Date(),
         }
     });
