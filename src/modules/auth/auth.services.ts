@@ -6,81 +6,85 @@ import logger from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
 
 export const adminLogin = async (email: string, password: string) => {
-    // 1. Initial Validation & Trimming
-    const trimmedEmail = email ? email.trim() : "";
-    const trimmedPassword = password ? password.trim() : "";
+    try {
+        // 1. Initial Validation & Trimming
+        const trimmedEmail = email ? email.trim() : "";
+        const trimmedPassword = password ? password.trim() : "";
 
-    logger.debug(`[adminLogin] Attempting login for email: "${trimmedEmail}"`);
+        logger.debug(`[adminLogin] Attempting login for email: "${trimmedEmail}"`);
 
-    if (!trimmedEmail || !trimmedPassword) {
-        throw new AppError(400, "Invalid email or password");
-    }
-
-    // 2. Database Lookup (Directly targeting Admin role)
-    // We filter by role here to avoid getting a non-admin user with the same email
-    let user = await Prisma.user.findFirst({
-        where: {
-            email: { equals: trimmedEmail, mode: 'insensitive' },
-            role: UserRole.admin
-        },
-        select: {
-            userId: true,
-            userName: true,
-            email: true,
-            password: true,
-            role: true,
-            contact: true,
-            companyName: true
+        if (!trimmedEmail || !trimmedPassword) {
+            throw new AppError(400, "Invalid email or password");
         }
-    });
 
-    if (!user) {
-        logger.warn(`[adminLogin] User search failed for email: ${trimmedEmail}. User not found.`);
-        throw new AppError(401, "Invalid email or password");
-    }
+        // 2. Database Lookup (Directly targeting Admin role)
+        // We filter by role here to avoid getting a non-admin user with the same email
+        let user = await Prisma.user.findFirst({
+            where: {
+                email: { equals: trimmedEmail, mode: 'insensitive' },
+                role: UserRole.admin
+            },
+            select: {
+                userId: true,
+                userName: true,
+                email: true,
+                password: true,
+                role: true,
+                contact: true,
+                companyName: true
+            }
+        });
 
-    // 3. Password Verification
-    logger.debug(`[adminLogin] User found in DB. ID: ${user.userId}`);
-
-    if (!user.password) {
-        logger.warn(`[adminLogin] User has no password set.`);
-        throw new AppError(500, "Admin user exists but has no password set. Please contact support.");
-    }
-
-    const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
-
-    if (!isPasswordValid) {
-        logger.warn(`[adminLogin] Password validation failed for user: ${user.email}`);
-        throw new AppError(401, "Invalid email or password");
-    }
-
-    // 4. Success
-    const accessToken = generateAdminToken(user.userId, user.email);
-    const refreshToken = generateRefreshToken(user.userId);
-
-    // Store Refresh Token
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    await Prisma.refreshToken.create({
-        data: {
-            token: refreshToken,
-            userId: user.userId,
-            expiresAt
+        if (!user) {
+            logger.warn(`[adminLogin] User search failed for email: ${trimmedEmail}. User not found.`);
+            throw new AppError(401, "Invalid email or password");
         }
-    });
 
-    logger.info(`[adminLogin] Login successful for: ${user.email}`);
+        // 3. Password Verification
+        logger.debug(`[adminLogin] User found in DB. ID: ${user.userId}`);
 
-    return {
-        success: true,
-        message: "Login successful",
-        accessToken,
-        refreshToken,
-        email: user.email,
-        role: "admin",
-        userId: user.userId
-    };
+        if (!user.password) {
+            logger.warn(`[adminLogin] User has no password set.`);
+            throw new AppError(500, "Admin user exists but has no password set. Please contact support.");
+        }
+
+        const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
+
+        if (!isPasswordValid) {
+            logger.warn(`[adminLogin] Password validation failed for user: ${user.email}`);
+            throw new AppError(401, "Invalid email or password");
+        }
+
+        // 4. Success
+        const accessToken = generateAdminToken(user.userId, user.email);
+        const refreshToken = generateRefreshToken(user.userId);
+
+        // Store Refresh Token
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        await Prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.userId,
+                expiresAt
+            }
+        });
+
+        logger.info(`[adminLogin] Login successful for: ${user.email}`);
+
+        return {
+            success: true,
+            message: "Login successful",
+            accessToken,
+            refreshToken,
+            email: user.email,
+            role: "admin",
+            userId: user.userId
+        };
+    } catch (error) {
+        console.log(error);
+    }
 };
 
 /**
