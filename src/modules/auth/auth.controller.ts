@@ -67,7 +67,8 @@ export const adminLogin = async (req: Request, res: Response, next: NextFunction
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            token: result.token,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
             email: result.email,
             role: result.role
         });
@@ -143,7 +144,8 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            token: result.token,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
             email: result.email,
             role: result.role,
             userId: result.userId
@@ -220,7 +222,8 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            token: result.token,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
             email: result.email,
             role: result.role,
             userId: result.userId
@@ -273,6 +276,62 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
         return res.status(200).json({
             success: result.success,
             message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh Access Token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["refreshToken"]
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Token refresh successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       401:
+ *         description: Invalid or expired refresh token
+ */
+export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Refresh token is required"
+            });
+        }
+
+        const result = await authServices.refreshAccessToken(refreshToken);
+
+        return res.status(200).json({
+            success: true,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken
         });
     } catch (error) {
         next(error);
