@@ -148,10 +148,23 @@ export const createProject = async (data:
  * @param search - Search term for project name, location, material, or notes
  * @returns List of projects
  */
+// Helper function to format Project ID (PR0001 format)
+const formatProjectId = (projectId: string, index?: number): string => {
+    // If index is provided, use it for sequential numbering
+    if (index !== undefined) {
+        return `PR${String(index + 1).padStart(4, '0')}`;
+    }
+    // Otherwise, extract number from UUID or use a hash
+    const hash = projectId.split('-')[0] || projectId.substring(0, 8);
+    // Use first 4 chars of hash as hex to generate number
+    const num = parseInt(hash.substring(0, 4), 16) % 10000;
+    return `PR${String(num).padStart(4, '0')}`;
+};
+
 /**
- * Get all projects with optional search and progress percentage
+ * Get all projects with optional search
  * @param search - Search term for project name, location, material, or notes
- * @returns List of projects with progress
+ * @returns List of projects with custom ID
  */
 export const getAllTheProjects = async (search?: string) => {
     const whereClause: Prisma.ProjectWhereInput = {};
@@ -169,20 +182,24 @@ export const getAllTheProjects = async (search?: string) => {
         where: whereClause,
         include: {
             customer: true,
-            supervisor: true, // Also useful to have supervisor details often
+            supervisor: true,
             materials: true,
             dailyUpdates: {
                 where: { status: DailyUpdateStatus.approved },
                 select: { constructionStage: true }
             }
-        }
+        },
+        orderBy: { createdAt: 'desc' } // Order by creation time
     });
 
-    return projects.map(project => {
+    return projects.map((project, index) => {
         // Exclude the big dailyUpdates array from the final response to keep it clean.
-        // We now use the stored 'progress' field from the database instead of calculating it.
         const { dailyUpdates, ...rest } = project;
-        return rest;
+
+        return {
+            ...rest,
+            id: formatProjectId(project.projectId, index)
+        };
     });
 };
 

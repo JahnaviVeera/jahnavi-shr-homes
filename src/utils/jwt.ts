@@ -32,7 +32,26 @@ export const generateAdminToken = (userId: string, email: string): string => {
         role: "admin"
     };
 
-    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
+
+    const signOptions: SignOptions = { expiresIn: expiresIn as any };
+    return jwt.sign(payload, secret, signOptions);
+};
+
+/**
+ * Generate Refresh Token
+ * @param userId - User ID
+ * @returns Refresh token string
+ */
+export const generateRefreshToken = (userId: string): string => {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+        throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
+    const payload = { userId };
+    const expiresIn = process.env.JWT_REFRESH_EXPIRY || "7d";
 
     const signOptions: SignOptions = { expiresIn: expiresIn as any };
     return jwt.sign(payload, secret, signOptions);
@@ -62,7 +81,7 @@ export const generateUserToken = (userId: string, email: string, role: string): 
         role
     };
 
-    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
 
     const signOptions: SignOptions = { expiresIn: expiresIn as any };
     return jwt.sign(payload, secret, signOptions);

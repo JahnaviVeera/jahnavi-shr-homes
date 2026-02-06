@@ -1,7 +1,7 @@
 ﻿import Prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
 import { UserRole } from "@prisma/client";
-import { generateAdminToken, generateUserToken } from "../../utils/jwt";
+import { generateAdminToken, generateUserToken, generateRefreshToken, verifyToken } from "../../utils/jwt";
 import logger from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
 
@@ -55,13 +55,28 @@ export const adminLogin = async (email: string, password: string) => {
     }
 
     // 4. Success
-    const token = generateAdminToken(user.userId, user.email);
+    const accessToken = generateAdminToken(user.userId, user.email);
+    const refreshToken = generateRefreshToken(user.userId);
+
+    // Store Refresh Token
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await Prisma.refreshToken.create({
+        data: {
+            token: refreshToken,
+            userId: user.userId,
+            expiresAt
+        }
+    });
+
     logger.info(`[adminLogin] Login successful for: ${user.email}`);
 
     return {
         success: true,
         message: "Login successful",
-        token,
+        accessToken,
+        refreshToken,
         email: user.email,
         role: "admin",
         userId: user.userId
@@ -112,11 +127,26 @@ export const userLogin = async (email: string, password: string) => {
     }
 
     // 4. Success
-    const token = generateUserToken(user.userId, user.email, user.role);
+    const accessToken = generateUserToken(user.userId, user.email, user.role);
+    const refreshToken = generateRefreshToken(user.userId);
+
+    // Store Refresh Token
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await Prisma.refreshToken.create({
+        data: {
+            token: refreshToken,
+            userId: user.userId,
+            expiresAt
+        }
+    });
+
     return {
         success: true,
         message: "Login successful",
-        token,
+        accessToken,
+        refreshToken,
         email: user.email,
         role: user.role,
         userId: user.userId
@@ -176,11 +206,26 @@ export const supervisorLogin = async (email: string, password: string) => {
         throw new AppError(401, "Invalid email or password");
     }
     // 4. Success
-    const token = generateUserToken(user.userId, user.email, user.role);
+    const accessToken = generateUserToken(user.userId, user.email, user.role);
+    const refreshToken = generateRefreshToken(user.userId);
+
+    // Store Refresh Token
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await Prisma.refreshToken.create({
+        data: {
+            token: refreshToken,
+            userId: user.userId,
+            expiresAt
+        }
+    });
+
     return {
         success: true,
         message: "Supervisor login successful",
-        token,
+        accessToken,
+        refreshToken,
         email: user.email,
         role: user.role,
         userId: user.userId
@@ -213,4 +258,59 @@ export const logout = async (token: string, expiresAt: Date) => {
             message: "Logged out successfully"
         };
     }
+};
+
+export const refreshAccessToken = async (incomingRefreshToken: string) => {
+    // 1. Verify signature
+    const decoded = verifyToken(incomingRefreshToken);
+    if (!decoded) {
+        throw new AppError(401, "Invalid refresh token");
+    }
+
+    // 2. Find in DB
+    const storedToken = await Prisma.refreshToken.findUnique({
+        where: { token: incomingRefreshToken },
+        include: { user: true }
+    });
+
+    if (!storedToken) {
+        throw new AppError(401, "Invalid refresh token (not found)");
+    }
+
+    // 3. Check expiry (DB)
+    if (new Date() > storedToken.expiresAt) {
+        await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
+        throw new AppError(403, "Refresh token expired");
+    }
+
+    // 4. Token Rotation: Delete used token
+    await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
+
+    // 5. Generate new tokens
+    const { userId, email, role } = storedToken.user;
+
+    let newAccessToken;
+    if (role === 'admin') {
+        newAccessToken = generateAdminToken(userId, email);
+    } else {
+        newAccessToken = generateUserToken(userId, email, role as string);
+    }
+
+    const newRefreshToken = generateRefreshToken(userId);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await Prisma.refreshToken.create({
+        data: {
+            token: newRefreshToken,
+            userId,
+            expiresAt
+        }
+    });
+
+    return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+    };
 };

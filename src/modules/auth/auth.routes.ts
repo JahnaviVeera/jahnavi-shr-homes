@@ -20,6 +20,8 @@ router.post("/user/login", authController.userLogin);
 
 router.post("/supervisor/login", authController.supervisorLogin);
 
+router.post("/refresh", authController.refreshAccessToken);
+
 router.post("/logout", authenticate, authController.logout);
 
 
