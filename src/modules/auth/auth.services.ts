@@ -84,6 +84,7 @@ export const adminLogin = async (email: string, password: string) => {
         };
     } catch (error) {
         console.log(error);
+        throw error;
     }
 };
 

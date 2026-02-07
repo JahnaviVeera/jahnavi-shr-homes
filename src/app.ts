@@ -22,7 +22,12 @@ const app = express();
 
 /* -------------------- Global Middlewares -------------------- */
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:8080',  // ✅ YOUR actual port
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // JSON body parser
 app.use(express.json({
