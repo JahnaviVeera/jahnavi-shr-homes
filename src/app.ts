@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger";
 import projectRoutes from "./modules/project/project.routes";
@@ -29,6 +30,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Cookie parser
+app.use(cookieParser());
+
 // JSON body parser
 app.use(express.json({
     limit: '10mb',
@@ -49,7 +53,6 @@ app.get("/api-docs-json", (req, res) => {
 // app.listen(env.PORT,()=>{
 //     console.log(`Server is running on port ${env.PORT}`);
 // });
-
 
 app.use("/api/project", projectRoutes)
 app.use("/api/user", userRoutes)

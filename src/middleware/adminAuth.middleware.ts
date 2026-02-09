@@ -26,7 +26,12 @@ export const adminAuthMiddleware = async (req: AuthRequest, res: Response, next:
     try {
         // Extract token from Authorization header
         const authHeader = req.headers.authorization;
-        const token = extractTokenFromHeader(authHeader);
+        let token = extractTokenFromHeader(authHeader);
+
+        // Fallback: Check cookies
+        if (!token && req.cookies && req.cookies.accessToken) {
+            token = req.cookies.accessToken;
+        }
 
         if (!token) {
             return res.status(401).json({

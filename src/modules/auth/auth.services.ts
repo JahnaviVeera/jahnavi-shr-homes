@@ -80,7 +80,8 @@ export const adminLogin = async (email: string, password: string) => {
             refreshToken,
             email: user.email,
             role: "admin",
-            userId: user.userId
+            userId: user.userId,
+            userName: user.userName
         };
     } catch (error) {
         console.log(error);
@@ -154,7 +155,8 @@ export const userLogin = async (email: string, password: string) => {
         refreshToken,
         email: user.email,
         role: user.role,
-        userId: user.userId
+        userId: user.userId,
+        userName: user.userName
     };
 };
 
@@ -233,7 +235,8 @@ export const supervisorLogin = async (email: string, password: string) => {
         refreshToken,
         email: user.email,
         role: user.role,
-        userId: user.userId
+        userId: user.userId,
+        userName: user.userName
     };
 };
 

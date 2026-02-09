@@ -20,6 +20,13 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         const authHeader = req.headers.authorization;
         let token = extractTokenFromHeader(authHeader);
 
+        // Fallback: Check cookies
+        if (!token && req.cookies && req.cookies.accessToken) {
+            token = req.cookies.accessToken;
+        }
+
+        console.log(`[AuthMiddleware] Path: ${req.path}, Token found: ${!!token}, Cookies: ${JSON.stringify(req.cookies)}`);
+
         // Fallback: Check query parameter (useful for downloads or simple browser testing)
         if (!token && req.query.token && typeof req.query.token === 'string') {
             token = req.query.token;
