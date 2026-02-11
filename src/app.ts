@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger";
 import projectRoutes from "./modules/project/project.routes";
@@ -23,11 +24,29 @@ const app = express();
 /* -------------------- Global Middlewares -------------------- */
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:8080',  // ✅ YOUR actual port
+    origin: (origin, callback) => {
+        const allowedOrigins = [
+            process.env.FRONTEND_URL,
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://localhost:8080',
+            'http://localhost:3001'
+        ];
+        // Allow requests with no origin (like mobile apps or curl) or allowed local origins
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`[CORS] Rejected origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    // allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
+
+// Cookie parser
+app.use(cookieParser());
 
 // JSON body parser
 app.use(express.json({
@@ -49,7 +68,6 @@ app.get("/api-docs-json", (req, res) => {
 // app.listen(env.PORT,()=>{
 //     console.log(`Server is running on port ${env.PORT}`);
 // });
-
 
 app.use("/api/project", projectRoutes)
 app.use("/api/user", userRoutes)

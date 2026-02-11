@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
-import { verifyToken, extractTokenFromHeader } from "../utils/jwt";
+import { verifyToken } from "../utils/jwt";
 import prisma from "../config/prisma.client";
 
 // Ensure dotenv is loaded before accessing environment variables
@@ -24,14 +24,13 @@ interface AuthRequest extends Request {
 
 export const adminAuthMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // Extract token from Authorization header
-        const authHeader = req.headers.authorization;
-        const token = extractTokenFromHeader(authHeader);
+        // Strictly use accessToken from cookies
+        const token = req.cookies?.accessToken;
 
         if (!token) {
             return res.status(401).json({
                 success: false,
-                message: "Authorization token is required. Please provide a valid Bearer token."
+                message: "Authentication required. Please login."
             });
         }
 

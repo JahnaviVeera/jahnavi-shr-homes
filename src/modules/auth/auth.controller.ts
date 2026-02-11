@@ -1,7 +1,6 @@
 ﻿import type { Request, Response, NextFunction } from "express";
 import * as authServices from "./auth.services";
 import jwt from "jsonwebtoken";
-import { extractTokenFromHeader } from "../../utils/jwt";
 
 /**
  * @swagger
@@ -61,16 +60,35 @@ import { extractTokenFromHeader } from "../../utils/jwt";
 export const adminLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
-
+        console.log(`[Login] Request from Origin: ${req.headers.origin}`);
         const result = await authServices.adminLogin(email, password);
+
+        // Set cookies
+        console.log(`[AdminLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'development';
+
+        res.cookie('accessToken', result.accessToken, {
+            httpOnly: true,
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
 
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            email: result.email,
-            role: result.role
+            user: {
+                id: result.userId,
+                role: result.role,
+                username: result.userName
+            }
         });
     } catch (error) {
         next(error);
@@ -141,14 +159,32 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
 
         const result = await authServices.userLogin(email, password);
 
+        // Set cookies
+        console.log(`[UserLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        res.cookie('accessToken', result.accessToken, {
+            httpOnly: true,
+            secure: true, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: true, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            email: result.email,
-            role: result.role,
-            userId: result.userId
+            user: {
+                id: result.userId,
+                role: result.role,
+                username: result.userName
+            }
         });
     } catch (error) {
         next(error);
@@ -219,14 +255,32 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
         // console.log(email, password);
         const result = await authServices.supervisorLogin(email, password);
 
+        // Set cookies
+        console.log(`[SupervisorLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        res.cookie('accessToken', result.accessToken, {
+            httpOnly: true,
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+
         return res.status(200).json({
             success: result.success,
             message: result.message,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            email: result.email,
-            role: result.role,
-            userId: result.userId
+            user: {
+                id: result.userId,
+                role: result.role,
+                username: result.userName
+            }
         });
     } catch (error) {
         next(error);
@@ -258,10 +312,13 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
  */
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const authHeader = req.headers.authorization;
-        const token = extractTokenFromHeader(authHeader);
+        const token = req.cookies.accessToken;
 
         if (!token) {
+            // Also need to clear cookies even if token is not found/expired
+            res.clearCookie('accessToken');
+            res.clearCookie('refreshToken');
+
             return res.status(200).json({
                 success: true,
                 message: "Logged out successfully"
@@ -272,6 +329,10 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
         const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         const result = await authServices.logout(token, expiresAt);
+
+        // Clear cookies
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
 
         return res.status(200).json({
             success: result.success,
@@ -317,21 +378,36 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
  */
 export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { refreshToken } = req.body;
+        const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
-            return res.status(400).json({
+            return res.status(401).json({
                 success: false,
-                message: "Refresh token is required"
+                message: "Refresh token is missing"
             });
         }
 
         const result = await authServices.refreshAccessToken(refreshToken);
 
+        // Set new cookies
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        res.cookie('accessToken', result.newAccessToken, {
+            httpOnly: true,
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', result.newRefreshToken, {
+            httpOnly: true,
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+
         return res.status(200).json({
-            success: true,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken
+            success: true
         });
     } catch (error) {
         next(error);
