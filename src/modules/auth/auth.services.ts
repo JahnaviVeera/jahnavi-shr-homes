@@ -1,7 +1,7 @@
 ﻿import Prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
 import { UserRole } from "@prisma/client";
-import { generateAdminToken, generateUserToken, generateRefreshToken, verifyToken } from "../../utils/jwt";
+import { generateAdminToken, generateUserToken, generateRefreshToken } from "../../utils/jwt";
 import logger from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
 
@@ -57,11 +57,11 @@ export const adminLogin = async (email: string, password: string) => {
 
         // 4. Success
         const accessToken = generateAdminToken(user.userId, user.email);
-        const refreshToken = generateRefreshToken(user.userId);
+        const refreshToken = generateRefreshToken();
 
-        // Store Refresh Token
+        // Store Refresh Token (30 days expiry)
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
+        expiresAt.setDate(expiresAt.getDate() + 30);
 
         await Prisma.refreshToken.create({
             data: {
@@ -72,7 +72,8 @@ export const adminLogin = async (email: string, password: string) => {
         });
 
         logger.info(`[adminLogin] Login successful for: ${user.email}`);
-
+        console.log(accessToken);
+        console.log(refreshToken);
         return {
             success: true,
             message: "Login successful",
@@ -82,7 +83,7 @@ export const adminLogin = async (email: string, password: string) => {
             role: "admin",
             userId: user.userId,
             userName: user.userName
-        };
+        }
     } catch (error) {
         console.log(error);
         throw error;
@@ -134,11 +135,11 @@ export const userLogin = async (email: string, password: string) => {
 
     // 4. Success
     const accessToken = generateUserToken(user.userId, user.email, user.role);
-    const refreshToken = generateRefreshToken(user.userId);
+    const refreshToken = generateRefreshToken();
 
-    // Store Refresh Token
+    // Store Refresh Token (30 days expiry)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     await Prisma.refreshToken.create({
         data: {
@@ -214,11 +215,11 @@ export const supervisorLogin = async (email: string, password: string) => {
     }
     // 4. Success
     const accessToken = generateUserToken(user.userId, user.email, user.role);
-    const refreshToken = generateRefreshToken(user.userId);
+    const refreshToken = generateRefreshToken();
 
-    // Store Refresh Token
+    // Store Refresh Token (30 days expiry)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     await Prisma.refreshToken.create({
         data: {
@@ -269,32 +270,26 @@ export const logout = async (token: string, expiresAt: Date) => {
 };
 
 export const refreshAccessToken = async (incomingRefreshToken: string) => {
-    // 1. Verify signature
-    const decoded = verifyToken(incomingRefreshToken);
-    if (!decoded) {
-        throw new AppError(401, "Invalid refresh token");
-    }
-
-    // 2. Find in DB
+    // 1. Find in DB (Opaque token validation)
     const storedToken = await Prisma.refreshToken.findUnique({
         where: { token: incomingRefreshToken },
         include: { user: true }
     });
 
     if (!storedToken) {
-        throw new AppError(401, "Invalid refresh token (not found)");
+        throw new AppError(401, "Invalid refresh token");
     }
 
-    // 3. Check expiry (DB)
+    // 2. Check expiry
     if (new Date() > storedToken.expiresAt) {
         await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
         throw new AppError(403, "Refresh token expired");
     }
 
-    // 4. Token Rotation: Delete used token
+    // 3. Token Rotation: Delete used token
     await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
-    // 5. Generate new tokens
+    // 4. Generate new tokens
     const { userId, email, role } = storedToken.user;
 
     let newAccessToken;
@@ -304,10 +299,10 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
         newAccessToken = generateUserToken(userId, email, role as string);
     }
 
-    const newRefreshToken = generateRefreshToken(userId);
+    const newRefreshToken = generateRefreshToken();
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     await Prisma.refreshToken.create({
         data: {
@@ -318,7 +313,7 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
     });
 
     return {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken
+        newAccessToken,
+        newRefreshToken
     };
 };

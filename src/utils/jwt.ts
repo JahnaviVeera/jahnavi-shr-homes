@@ -38,23 +38,14 @@ export const generateAdminToken = (userId: string, email: string): string => {
     return jwt.sign(payload, secret, signOptions);
 };
 
+import crypto from "crypto";
+
 /**
- * Generate Refresh Token
- * @param userId - User ID
- * @returns Refresh token string
+ * Generate Refresh Token (Opaque)
+ * @returns Opaque refresh token string
  */
-export const generateRefreshToken = (userId: string): string => {
-    const secret = process.env.JWT_SECRET;
-
-    if (!secret) {
-        throw new Error("JWT_SECRET is not defined in environment variables");
-    }
-
-    const payload = { userId };
-    const expiresIn = process.env.JWT_REFRESH_EXPIRY || "7d";
-
-    const signOptions: SignOptions = { expiresIn: expiresIn as any };
-    return jwt.sign(payload, secret, signOptions);
+export const generateRefreshToken = (): string => {
+    return crypto.randomBytes(40).toString("hex");
 };
 
 /**
@@ -124,4 +115,3 @@ export const extractTokenFromHeader = (authHeader: string | undefined): string |
 
     return parts[1] ?? null;
 };
-

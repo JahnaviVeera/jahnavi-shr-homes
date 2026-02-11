@@ -1,7 +1,6 @@
 ﻿import type { Request, Response, NextFunction } from "express";
 import * as authServices from "./auth.services";
 import jwt from "jsonwebtoken";
-import { extractTokenFromHeader } from "../../utils/jwt";
 
 /**
  * @swagger
@@ -61,23 +60,25 @@ import { extractTokenFromHeader } from "../../utils/jwt";
 export const adminLogin = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { email, password } = req.body;
-
+        console.log(`[Login] Request from Origin: ${req.headers.origin}`);
         const result = await authServices.adminLogin(email, password);
 
         // Set cookies
         console.log(`[AdminLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'development';
+
         res.cookie('accessToken', result.accessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
         res.cookie('refreshToken', result.refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 
         return res.status(200).json({
@@ -160,18 +161,20 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
 
         // Set cookies
         console.log(`[UserLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'production';
+
         res.cookie('accessToken', result.accessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: true, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
         res.cookie('refreshToken', result.refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            secure: true, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 
         return res.status(200).json({
@@ -254,18 +257,20 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
 
         // Set cookies
         console.log(`[SupervisorLogin] Setting cookies for user: ${result.email}`);
+        const isProduction = process.env.NODE_ENV === 'production';
+
         res.cookie('accessToken', result.accessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
         res.cookie('refreshToken', result.refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 
         return res.status(200).json({
@@ -307,13 +312,7 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
  */
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const authHeader = req.headers.authorization;
-        let token = extractTokenFromHeader(authHeader);
-
-        // Fallback: Check cookies
-        if (!token && req.cookies && req.cookies.accessToken) {
-            token = req.cookies.accessToken;
-        }
+        const token = req.cookies.accessToken;
 
         if (!token) {
             // Also need to clear cookies even if token is not found/expired
@@ -379,30 +378,32 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
  */
 export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+        const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
-            return res.status(400).json({
+            return res.status(401).json({
                 success: false,
-                message: "Refresh token is required"
+                message: "Refresh token is missing"
             });
         }
 
         const result = await authServices.refreshAccessToken(refreshToken);
 
         // Set new cookies
-        res.cookie('accessToken', result.accessToken, {
+        const isProduction = process.env.NODE_ENV === 'production';
+
+        res.cookie('accessToken', result.newAccessToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
-        res.cookie('refreshToken', result.refreshToken, {
+        res.cookie('refreshToken', result.newRefreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            secure: isProduction, // Must be false for local http://
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 
         return res.status(200).json({
