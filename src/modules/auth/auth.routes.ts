@@ -1,6 +1,6 @@
 ﻿import express from "express";
 import * as authController from "./auth.controller";
-import { authenticate } from "../../middleware/auth.middleware";
+import { authenticate, authorizeRoles } from "../../middleware/auth.middleware";
 
 const router = express.Router();
 
@@ -13,6 +13,10 @@ const router = express.Router();
 
 
 router.post("/admin/login", authController.adminLogin);
+
+router.post("/admin/signup", authController.adminSignup);
+
+// router.delete("/admin/clear-database", authenticate, authorizeRoles("admin"), authController.clearDatabase);
 
 
 router.post("/user/login", authController.userLogin);
