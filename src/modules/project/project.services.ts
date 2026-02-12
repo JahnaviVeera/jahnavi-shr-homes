@@ -162,11 +162,13 @@ const formatProjectId = (projectId: string, index?: number): string => {
 };
 
 /**
- * Get all projects with optional search
+ * Get all projects with optional search and pagination
  * @param search - Search term for project name, location, material, or notes
- * @returns List of projects with custom ID
+ * @param page - Page number for pagination
+ * @param limit - Number of items per page
+ * @returns List of projects with pagination metadata
  */
-export const getAllTheProjects = async (search?: string) => {
+export const getAllTheProjects = async (search?: string, page?: number, limit?: number) => {
     const whereClause: Prisma.ProjectWhereInput = {};
 
     if (search) {
@@ -178,7 +180,10 @@ export const getAllTheProjects = async (search?: string) => {
         ];
     }
 
-    const projects = await prisma.project.findMany({
+    // Pagination logic
+    const isPaginationEnabled = page !== undefined && limit !== undefined;
+
+    const queryOptions: Prisma.ProjectFindManyArgs = {
         where: whereClause,
         include: {
             customer: true,
@@ -190,17 +195,59 @@ export const getAllTheProjects = async (search?: string) => {
             }
         },
         orderBy: { createdAt: 'desc' } // Order by creation time
-    });
+    };
 
-    return projects.map((project, index) => {
+    if (isPaginationEnabled) {
+        queryOptions.skip = (page! - 1) * limit!;
+        queryOptions.take = limit!;
+    }
+
+    // Run queries in parallel if pagination is enabled to get total count
+    const [projects, totalCount] = await Promise.all([
+        prisma.project.findMany(queryOptions),
+        isPaginationEnabled ? prisma.project.count({ where: whereClause }) : Promise.resolve(0)
+    ]);
+
+    const formattedProjects = projects.map((project, index) => {
         // Exclude the big dailyUpdates array from the final response to keep it clean.
-        const { dailyUpdates, ...rest } = project;
+        // We need to cast project to any or specific type because Prisma includes types are complex
+        const p = project as any;
+        const { dailyUpdates, ...rest } = p;
+
+        // Format dates to DD-MM-YYYY
+        const formatToDDMMYYYY = (date: Date | string | null): string => {
+            if (!date) return '';
+            const d = new Date(date);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        // Determine the correct index for ID generation
+        const sequentialIndex = isPaginationEnabled ? ((page! - 1) * limit!) + index : index;
 
         return {
             ...rest,
-            id: formatProjectId(project.projectId, index)
+            startDate: formatToDDMMYYYY(project.startDate),
+            expectedCompletion: formatToDDMMYYYY(project.expectedCompletion),
+            id: formatProjectId(project.projectId, sequentialIndex)
         };
     });
+
+    if (isPaginationEnabled) {
+        return {
+            projects: formattedProjects,
+            pagination: {
+                total: totalCount,
+                page: Number(page),
+                limit: Number(limit),
+                totalPages: Math.ceil(totalCount / Number(limit))
+            }
+        };
+    }
+
+    return formattedProjects;
 };
 
 // Update project
@@ -303,9 +350,9 @@ export const updateProject = async (projectId: string, updateData: {
         if (!supervisor) {
             throw new Error(`Supervisor with ID ${updateData.supervisorId} not found`);
         }
-        (dataToUpdate as any).supervisorId = updateData.supervisorId;
+        dataToUpdate.supervisor = { connect: { supervisorId: updateData.supervisorId } };
     } else if (updateData.supervisorId === null) {
-        (dataToUpdate as any).supervisorId = null;
+        dataToUpdate.supervisor = { disconnect: true };
     }
 
     const updatedProject = await prisma.project.update({
@@ -368,10 +415,29 @@ export const getProjectByProjectId = async (projectId: string) => {
     if (!projectId) throw new Error("Project ID is required");
     const project = await prisma.project.findUnique({
         where: { projectId },
-        include: { customer: true }
+        include: {
+            customer: true,
+            supervisor: true,
+            quotations: true
+        }
     });
     if (!project) throw new Error(`Project with ID ${projectId} not found`);
-    return project;
+
+    // Format dates to DD-MM-YYYY
+    const formatToDDMMYYYY = (date: Date | string | null): string => {
+        if (!date) return '';
+        const d = new Date(date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+    };
+
+    return {
+        ...project,
+        startDate: formatToDDMMYYYY(project.startDate),
+        expectedCompletion: formatToDDMMYYYY(project.expectedCompletion)
+    };
 };
 
 // Alias for backward compatibility
@@ -391,6 +457,23 @@ export const getProjectsByCustomerId = async (customerId: string) => {
             location: true,
             progress: true,
             totalBudget: true,
+            supervisorId: true,
+            supervisor: {
+                select: {
+                    supervisorId: true,
+                    fullName: true,
+                    email: true,
+                    phoneNumber: true
+                }
+            },
+            quotations: {
+                select: {
+                    quotationId: true,
+                    totalAmount: true,
+                    status: true,
+                    date: true
+                }
+            },
             expenses: {
                 select: {
                     amount: true
@@ -411,7 +494,15 @@ export const getProjectsByCustomerId = async (customerId: string) => {
             totalProgress: project.progress,
             totalBudget: project.totalBudget,
             totalExpense: totalExpense,
-            totalBudgetUsed: totalBudgetUsed
+            totalBudgetUsed: totalBudgetUsed,
+            supervisorId: project.supervisorId,
+            supervisor: project.supervisor ? {
+                supervisorId: project.supervisor.supervisorId,
+                fullName: project.supervisor.fullName,
+                email: project.supervisor.email,
+                phoneNumber: project.supervisor.phoneNumber
+            } : null,
+            quotations: project.quotations
         };
     });
 };
@@ -507,3 +598,45 @@ export const getProjectSummaryForUser = async (userId: string) => {
         progress: project.progress || 0
     };
 };
+
+/**
+ * Get 9 most recent active projects for admin dashboard
+ * Active = Planning or Inprogress
+ * @returns List of projects
+ */
+export const getRecentActiveProjects = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            initialStatus: {
+                in: [ProjectStatus.Planning, ProjectStatus.Inprogress]
+            }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 9,
+        include: {
+            customer: true,
+            supervisor: true,
+            materials: true
+        }
+    });
+
+    return projects.map((project, index) => {
+        // Format dates to DD-MM-YYYY
+        const formatToDDMMYYYY = (date: Date | string | null): string => {
+            if (!date) return '';
+            const d = new Date(date);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        return {
+            ...project,
+            startDate: formatToDDMMYYYY(project.startDate),
+            expectedCompletion: formatToDDMMYYYY(project.expectedCompletion),
+            id: formatProjectId(project.projectId, index)
+        };
+    });
+};
+

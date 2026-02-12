@@ -189,6 +189,10 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 type: string
  *                 maxLength: 15
  *                 example: "9876543210"
+ *               status:
+ *                 type: string
+ *                 enum: ["Active", "Inactive"]
+ *                 example: "Active"
  *               estimatedInvestment:
  *                 type: number
  *                 format: decimal

@@ -147,6 +147,18 @@ exports.getProjectById = async (req: Request, res: Response) => {
  *         schema:
  *           type: string
  *         description: Search by project name, location, material, or notes
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Number of items per page
  *     responses:
  *       200:
  *         description: Projects fetched successfully
@@ -161,6 +173,17 @@ exports.getProjectById = async (req: Request, res: Response) => {
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/Project'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: integer
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
  *       400:
  *         description: Bad request
  *         content:
@@ -172,13 +195,28 @@ exports.getProjectById = async (req: Request, res: Response) => {
 exports.getAllProjects = async (req: Request, res: Response) => {
     try {
         const search = req.query.search as string;
-        const projects = await ProjectServices.getAllTheProjects(search);
+        const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
+        const result = await ProjectServices.getAllTheProjects(search, page, limit);
+
+        // Check if result has pagination metadata
+        if ('pagination' in result) {
+            return res.status(200).json({
+                success: true,
+                message: "Projects fetched successfully",
+                data: result.projects,
+                pagination: result.pagination
+            });
+        }
+
+        // Default response for no pagination
         return res.status(200).json({
             success: true,
             message: "Projects fetched successfully",
-            data: projects
-        })
+            data: result
+        });
+
     } catch (error) {
         return res.status(400).json({
             success: false,
@@ -384,3 +422,50 @@ exports.getProjectSummary = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/project/recent-active:
+ *   get:
+ *     summary: Get 9 most recent active projects (Admin only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Recent active projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Project'
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+exports.getRecentActiveProjects = async (req: Request, res: Response) => {
+    try {
+        const projects = await ProjectServices.getRecentActiveProjects();
+
+        return res.status(200).json({
+            success: true,
+            message: "Recent active projects fetched successfully",
+            data: projects
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+

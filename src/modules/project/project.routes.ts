@@ -27,6 +27,8 @@ router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supe
 
 router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
 
+router.get("/recent-active", authenticate, authorizeRoles("admin"), projectController.getRecentActiveProjects);
+
 router.get("/project-summary", authenticate, authorizeRoles("customer"), projectController.getProjectSummary);
 
 export default router;
