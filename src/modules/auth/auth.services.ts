@@ -335,3 +335,112 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
         newRefreshToken
     };
 };
+
+/**
+ * Admin Signup
+ * Create a new admin user
+ */
+export const adminSignup = async (data: {
+    userName: string;
+    email: string;
+    password?: string;
+    contact: string;
+    companyName?: string;
+}) => {
+    // 1. Check if user exists
+    const existingUser = await Prisma.user.findFirst({
+        where: { email: data.email }
+    });
+
+    if (existingUser) {
+        throw new AppError(400, "User already exists with this email");
+    }
+
+    // 2. Hash Password
+    let hashedPassword = null;
+    if (data.password && data.password.trim() !== "") {
+        hashedPassword = await bcrypt.hash(data.password.trim(), 10);
+    } else {
+        throw new AppError(400, "Password is required for admin signup");
+    }
+
+    // 3. Create Admin User
+    const newAdmin = await Prisma.user.create({
+        data: {
+            userName: data.userName,
+            email: data.email,
+            password: hashedPassword,
+            role: UserRole.admin,
+            contact: data.contact,
+            companyName: data.companyName || "SHR Homes",
+            status: UserStatus.Active,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }
+    });
+
+    // 4. Generate Tokens (Auto-login)
+    const accessToken = generateAdminToken(newAdmin.userId, newAdmin.email);
+    const refreshToken = generateRefreshToken();
+
+    // Store Refresh Token
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await Prisma.refreshToken.create({
+        data: {
+            token: refreshToken,
+            userId: newAdmin.userId,
+            expiresAt
+        }
+    });
+
+    return {
+        success: true,
+        message: "Admin created successfully",
+        accessToken,
+        refreshToken,
+        data: {
+            userId: newAdmin.userId,
+            userName: newAdmin.userName,
+            email: newAdmin.email,
+            role: newAdmin.role
+        }
+    };
+};
+
+/**
+ * Clear Database
+ * Truncate all tables
+ */
+export const clearDatabase = async () => {
+    // Determine the order of deletion based on foreign key constraints
+    // Child tables first, then parent tables.
+
+    try {
+        await Prisma.$transaction([
+            // 1. Delete dependent tables
+            Prisma.dailyUpdate.deleteMany(),
+            Prisma.quotation.deleteMany(),
+            Prisma.payment.deleteMany(),
+            Prisma.expense.deleteMany(),
+            Prisma.material.deleteMany(),
+            Prisma.document.deleteMany(),
+            Prisma.message.deleteMany(),
+            Prisma.notification.deleteMany(),
+            Prisma.refreshToken.deleteMany(),
+            Prisma.tokenBlacklist.deleteMany(),
+
+            // 2. Delete main tables
+            Prisma.project.deleteMany(),
+            Prisma.supervisor.deleteMany(),
+
+            // 3. Delete users (top-level)
+            Prisma.user.deleteMany(),
+        ]);
+
+        return { success: true, message: "All database data cleared successfully." };
+    } catch (error) {
+        throw new AppError(500, `Failed to clear database: ${error instanceof Error ? error.message : String(error)}`);
+    }
+};

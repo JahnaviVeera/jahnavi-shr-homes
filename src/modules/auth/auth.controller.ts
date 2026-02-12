@@ -413,3 +413,109 @@ export const refreshAccessToken = async (req: Request, res: Response, next: Next
         next(error);
     }
 };
+
+/**
+ * @swagger
+ * /api/auth/admin/signup:
+ *   post:
+ *     summary: Admin signup (Create a new admin user)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["userName", "email", "password", "contact"]
+ *             properties:
+ *               userName:
+ *                 type: string
+ *                 example: "Super Admin"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "newadmin@shrhomes.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "SecurePassword123!"
+ *               contact:
+ *                 type: string
+ *                 example: "9876543210"
+ *               companyName:
+ *                 type: string
+ *                 example: "SHR Homes"
+ *     responses:
+ *       201:
+ *         description: Admin created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad request - User already exists or validation error
+ */
+export const adminSignup = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { userName, email, password, contact, companyName } = req.body;
+
+        const result = await authServices.adminSignup({
+            userName,
+            email,
+            password,
+            contact,
+            companyName
+        });
+
+        // Set cookies for auto-login
+        res.cookie('accessToken', result.accessToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: 15 * 60 * 1000 // 15 minutes
+        });
+
+        res.cookie('refreshToken', result.refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+
+        return res.status(201).json(result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/auth/admin/clear-database:
+ *   delete:
+ *     summary: Clear all database data (DANGER - Use with caution)
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Database cleared successfully
+ *       500:
+ *         description: Failed to clear database
+ */
+export const clearDatabase = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await authServices.clearDatabase();
+        return res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+};
