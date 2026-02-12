@@ -166,14 +166,14 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
         res.cookie('accessToken', result.accessToken, {
             httpOnly: true,
             secure: true, // Must be false for local http://
-            sameSite: isProduction ? 'none' : 'lax',
+            sameSite: 'none',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
         res.cookie('refreshToken', result.refreshToken, {
             httpOnly: true,
             secure: true, // Must be false for local http://
-            sameSite: isProduction ? 'none' : 'lax',
+            sameSite: 'none',
             maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 
@@ -261,15 +261,15 @@ export const supervisorLogin = async (req: Request, res: Response, next: NextFun
 
         res.cookie('accessToken', result.accessToken, {
             httpOnly: true,
-            secure: isProduction, // Must be false for local http://
-            sameSite: isProduction ? 'none' : 'lax',
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
             maxAge: 15 * 60 * 1000 // 15 minutes
         });
 
         res.cookie('refreshToken', result.refreshToken, {
             httpOnly: true,
-            secure: isProduction, // Must be false for local http://
-            sameSite: isProduction ? 'none' : 'lax',
+            secure: true, // Must be false for local http://
+            sameSite: 'none',
             maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
         });
 

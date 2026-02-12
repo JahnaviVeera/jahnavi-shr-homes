@@ -443,6 +443,13 @@ export const getProjectByProjectId = async (projectId: string) => {
 // Alias for backward compatibility
 export const getProjectById = getProjectByProjectId;
 
+// Helper function to format Quotation ID (Q0001 format)
+const formatQuotationId = (quotationId: string): string => {
+    const hash = quotationId.split('-')[0] || quotationId.substring(0, 8);
+    const num = parseInt(hash.substring(0, 4), 16) % 10000;
+    return `Q${String(num).padStart(4, '0')}`;
+};
+
 /**
  * Get projects by Customer ID
  * @param customerId - The user ID of the customer
@@ -502,7 +509,10 @@ export const getProjectsByCustomerId = async (customerId: string) => {
                 email: project.supervisor.email,
                 phoneNumber: project.supervisor.phoneNumber
             } : null,
-            quotations: project.quotations
+            quotations: project.quotations.map(q => ({
+                ...q,
+                id: formatQuotationId(q.quotationId)
+            }))
         };
     });
 };
