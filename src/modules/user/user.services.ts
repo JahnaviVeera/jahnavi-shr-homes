@@ -1,6 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
-import { UserRole, Prisma, Timezone, Currency, Language } from "@prisma/client";
+import { UserRole, Prisma, Timezone, Currency, Language, UserStatus } from "@prisma/client";
 import * as projectService from "../project/project.services";
 
 // Create a new user
@@ -10,6 +10,7 @@ export const createUser = async (data: {
     email: string;
     password?: string | null;
     contact: string;
+    status?: UserStatus;
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
@@ -42,6 +43,7 @@ export const createUser = async (data: {
         email: data.email,
         password: hashedPassword,
         contact: data.contact,
+        status: data.status || UserStatus.Active,
         estimatedInvestment: data.estimatedInvestment || null,
         notes: data.notes || null,
         companyName: data.companyName || null,
@@ -88,6 +90,7 @@ export const getUserById = async (userId: string) => {
             password: true,
             role: true,
             contact: true,
+            status: true,
             estimatedInvestment: true,
             notes: true,
             companyName: true,
@@ -118,6 +121,7 @@ export const getAllUsers = async () => {
             email: true,
             role: true,
             contact: true,
+            status: true,
             companyName: true,
         }
     });
@@ -155,6 +159,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     email?: string;
     password?: string | null;
     contact?: string;
+    status?: UserStatus;
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
@@ -180,6 +185,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.role !== undefined) dataToUpdate.role = (updatedUserData.role === "user" ? UserRole.customer : updatedUserData.role) as UserRole;
     if (updatedUserData.email !== undefined) dataToUpdate.email = updatedUserData.email;
     if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
+    if (updatedUserData.status !== undefined) dataToUpdate.status = updatedUserData.status;
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
@@ -479,4 +485,122 @@ export const getAdminDashboardStats = async () => {
         activeSupervisors,
         pendingApprovals: totalPendingApprovals
     };
+};
+
+export const getUsersBySupervisor = async (supervisorId: string) => {
+    const projects = await prisma.project.findMany({
+        where: { supervisorId },
+        select: { customerId: true },
+        distinct: ['customerId']
+    });
+
+    const customerIds = projects.map(p => p.customerId);
+
+    const users = await prisma.user.findMany({
+        where: { userId: { in: customerIds } },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            contact: true,
+            status: true,
+            companyName: true,
+            role: true
+        }
+    });
+
+    return users;
+};
+
+export const getAllSupervisors = async () => {
+    const supervisors = await prisma.supervisor.findMany();
+
+    const result = await Promise.all(supervisors.map(async (s) => {
+        const user = await prisma.user.findUnique({
+            where: { userId: s.userId },
+            select: {
+                userId: true,
+                userName: true,
+                email: true,
+                status: true,
+                role: true
+            }
+        });
+        return {
+            ...s,
+            userName: user?.userName,
+            userEmail: user?.email,
+            userStatus: user?.status
+        };
+    }));
+
+    return result;
+};
+
+export const getUsersWithoutSupervisor = async () => {
+    const projects = await prisma.project.findMany({
+        where: {
+            supervisorId: null,
+            initialStatus: { in: ['Planning', 'Inprogress'] }
+        },
+        select: { customerId: true },
+        distinct: ['customerId']
+    });
+
+    const customerIds = projects.map(p => p.customerId);
+
+    const users = await prisma.user.findMany({
+        where: { userId: { in: customerIds } },
+        select: {
+            userId: true,
+            userName: true,
+            email: true,
+            contact: true,
+            status: true,
+            companyName: true
+        }
+    });
+
+    return users;
+};
+
+export const assignSupervisor = async (userId: string, supervisorId: string) => {
+    const supervisor = await prisma.supervisor.findUnique({ where: { supervisorId } });
+    if (!supervisor) {
+        throw new Error("Supervisor not found");
+    }
+
+    const updateResult = await prisma.project.updateMany({
+        where: {
+            customerId: userId,
+            initialStatus: { in: ['Planning', 'Inprogress'] }
+        },
+        data: {
+            supervisorId: supervisorId
+        }
+    });
+
+    return { count: updateResult.count, message: "Supervisor assigned to active projects" };
+};
+
+export const removeSupervisor = async (userId: string) => {
+    const updateResult = await prisma.project.updateMany({
+        where: {
+            customerId: userId,
+            initialStatus: { in: ['Planning', 'Inprogress'] }
+        },
+        data: {
+            supervisorId: null
+        }
+    });
+
+    return { count: updateResult.count, message: "Supervisor removed from active projects" };
+};
+
+export const approveSupervisor = async (userId: string) => {
+    return { message: "Supervisor assignment approved" };
+};
+
+export const rejectSupervisor = async (userId: string) => {
+    return { message: "Supervisor assignment rejected" };
 };

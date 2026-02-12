@@ -1,6 +1,6 @@
 ﻿import Prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
-import { UserRole } from "@prisma/client";
+import { UserRole, UserStatus } from "@prisma/client";
 import { generateAdminToken, generateUserToken, generateRefreshToken } from "../../utils/jwt";
 import logger from "../../utils/logger";
 import { AppError } from "../../utils/AppError";
@@ -18,7 +18,6 @@ export const adminLogin = async (email: string, password: string) => {
         }
 
         // 2. Database Lookup (Directly targeting Admin role)
-        // We filter by role here to avoid getting a non-admin user with the same email
         let user = await Prisma.user.findFirst({
             where: {
                 email: { equals: trimmedEmail, mode: 'insensitive' },
@@ -31,7 +30,8 @@ export const adminLogin = async (email: string, password: string) => {
                 password: true,
                 role: true,
                 contact: true,
-                companyName: true
+                companyName: true,
+                status: true
             }
         });
 
@@ -41,8 +41,6 @@ export const adminLogin = async (email: string, password: string) => {
         }
 
         // 3. Password Verification
-        logger.debug(`[adminLogin] User found in DB. ID: ${user.userId}`);
-
         if (!user.password) {
             logger.warn(`[adminLogin] User has no password set.`);
             throw new AppError(500, "Admin user exists but has no password set. Please contact support.");
@@ -53,6 +51,10 @@ export const adminLogin = async (email: string, password: string) => {
         if (!isPasswordValid) {
             logger.warn(`[adminLogin] Password validation failed for user: ${user.email}`);
             throw new AppError(401, "Invalid email or password");
+        }
+
+        if (user.status === UserStatus.Inactive) {
+            throw new AppError(403, "Account is inactive. Please contact support.");
         }
 
         // 4. Success
@@ -72,8 +74,7 @@ export const adminLogin = async (email: string, password: string) => {
         });
 
         logger.info(`[adminLogin] Login successful for: ${user.email}`);
-        console.log(accessToken);
-        console.log(refreshToken);
+
         return {
             success: true,
             message: "Login successful",
@@ -82,7 +83,8 @@ export const adminLogin = async (email: string, password: string) => {
             email: user.email,
             role: "admin",
             userId: user.userId,
-            userName: user.userName
+            userName: user.userName,
+            status: user.status
         }
     } catch (error) {
         console.log(error);
@@ -115,7 +117,8 @@ export const userLogin = async (email: string, password: string) => {
             userName: true,
             email: true,
             password: true,
-            role: true
+            role: true,
+            status: true
         }
     });
 
@@ -131,6 +134,10 @@ export const userLogin = async (email: string, password: string) => {
     const isPasswordValid = await bcrypt.compare(trimmedPassword, user.password);
     if (!isPasswordValid) {
         throw new AppError(401, "Invalid email or password");
+    }
+
+    if (user.status === UserStatus.Inactive) {
+        throw new AppError(403, "Account is inactive. Please contact support.");
     }
 
     // 4. Success
@@ -157,7 +164,8 @@ export const userLogin = async (email: string, password: string) => {
         email: user.email,
         role: user.role,
         userId: user.userId,
-        userName: user.userName
+        userName: user.userName,
+        status: user.status
     };
 };
 
@@ -189,13 +197,13 @@ export const supervisorLogin = async (email: string, password: string) => {
             userName: true,
             email: true,
             password: true,
-            role: true
+            role: true,
+            status: true
         }
     });
     console.log(user);
 
     if (!user) {
-
         throw new AppError(401, "Invalid email or password");
     }
 
@@ -213,6 +221,11 @@ export const supervisorLogin = async (email: string, password: string) => {
     if (!isPasswordValid) {
         throw new AppError(401, "Invalid email or password");
     }
+
+    if (user.status === UserStatus.Inactive) {
+        throw new AppError(403, "Account is inactive. Please contact support.");
+    }
+
     // 4. Success
     const accessToken = generateUserToken(user.userId, user.email, user.role);
     const refreshToken = generateRefreshToken();
@@ -237,7 +250,8 @@ export const supervisorLogin = async (email: string, password: string) => {
         email: user.email,
         role: user.role,
         userId: user.userId,
-        userName: user.userName
+        userName: user.userName,
+        status: user.status
     };
 };
 
@@ -278,6 +292,10 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
 
     if (!storedToken) {
         throw new AppError(401, "Invalid refresh token");
+    }
+
+    if (storedToken.user.status === UserStatus.Inactive) {
+        throw new AppError(403, "Account is inactive. Please contact support.");
     }
 
     // 2. Check expiry
