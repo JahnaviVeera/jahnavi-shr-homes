@@ -123,6 +123,9 @@ export const getAllUsers = async () => {
             contact: true,
             status: true,
             companyName: true,
+            estimatedInvestment: true,
+            createdAt: true,
+            updatedAt: true,
         }
     });
 
@@ -315,11 +318,11 @@ export const getCustomerLeadsStats = async () => {
     };
 };
 
-// Get New Leads List (Users with Inprogress or Planning projects)
+// Get New Leads List (Users with active projects - not completed)
 export const getNewLeadsList = async () => {
     const projects = await prisma.project.findMany({
         where: {
-            initialStatus: { in: ['Inprogress', 'Planning'] }
+            initialStatus: { notIn: ['Completed', 'complete'] }
         },
         include: {
             customer: true

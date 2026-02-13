@@ -224,6 +224,10 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 maxLength: 50
  *                 example: "English"
  *                 description: User language preference (optional)
+              address:
+                type: string
+                example: "123 Main St, New York, NY 10001"
+                description: User address (optional)
  *     responses:
  *       200:
  *         description: User updated successfully
