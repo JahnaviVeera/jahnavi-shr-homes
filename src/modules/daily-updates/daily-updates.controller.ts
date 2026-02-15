@@ -195,9 +195,28 @@ export const getAllDailyUpdates = async (req: RequestWithUser, res: Response) =>
 
         const dailyUpdates = await DailyUpdatesServices.getAllDailyUpdates(supervisorId, customerId);
 
+        // Calculate counts
+        let approved = 0;
+        let rejected = 0;
+        let pending = 0;
+
+        if (Array.isArray(dailyUpdates)) {
+            dailyUpdates.forEach((update: any) => {
+                const status = typeof update.status === 'string' ? update.status.toLowerCase() : String(update.status || '').toLowerCase();
+                if (status === 'approved') approved++;
+                else if (status === 'rejected') rejected++;
+                else if (status === 'pending') pending++;
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Daily updates fetched successfully",
+            counts: {
+                approved,
+                rejected,
+                pending
+            },
             data: dailyUpdates,
         });
     } catch (error) {

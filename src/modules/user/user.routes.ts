@@ -48,7 +48,7 @@ router.post("/profile/change-password", authenticate, authorizeRoles("admin", "s
 router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getuserById);
 
 
-router.put("/:userId", authenticate, authorizeRoles("admin"), UserController.updateUser);
+router.put("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.updateUser);
 
 
 router.delete("/:userId", authenticate, authorizeRoles("admin"), UserController.deleteUser);

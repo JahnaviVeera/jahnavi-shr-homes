@@ -31,7 +31,7 @@ interface MulterRequest extends Request {
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "plans", "permit", "others"]
+ *                 enum: ["Agreement", "Plans", "Permit", "Others"]
  *                 example: "Agreement"
  *                 description: Type of document
  *               description:
@@ -71,7 +71,7 @@ interface MulterRequest extends Request {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "plans", "permit", "others"]
+ *                           enum: ["Agreement", "Plans", "Permit", "Others"]
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -164,7 +164,7 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "plans", "permit", "others"]
+ *                           enum: ["Agreement", "Plans", "Permit", "Others"]
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -307,7 +307,7 @@ exports.getAllDocuments = async (req: MulterRequest, res: Response) => {
 //  *         required: true
 //  *         schema:
 //  *           type: string
-//  *           enum: ["Agreement", "plans", "permit", "others"]
+//  *           enum: ["Agreement", "Plans", "Permit", "Others"]
 //  *         description: Type of document
 //  *     responses:
 //  *       200:
@@ -426,7 +426,7 @@ exports.getAllDocuments = async (req: MulterRequest, res: Response) => {
  *                                 description: Name of the document file
  *                               documentType:
  *                                 type: string
- *                                 enum: ["Agreement", "plans", "permit", "others"]
+ *                                 enum: ["Agreement", "Plans", "Permit", "Others"]
  *                                 example: "Agreement"
  *                                 description: Type of the document
  *                               fileType:
@@ -498,8 +498,8 @@ exports.getDocumentsByProject = async (req: MulterRequest, res: Response) => {
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "plans", "permit", "others"]
- *                 example: "plans"
+ *                 enum: ["Agreement", "Plans", "Permit", "Others"]
+ *                 example: "Plans"
  *               description:
  *                 type: string
  *                 maxLength: 500
@@ -728,7 +728,7 @@ exports.downloadDocument = async (req: MulterRequest, res: Response) => {
  *     tags: [Documents]
  *     security:
  *       - bearerAuth: []
- *     description: Returns the count of documents grouped by type (Agreement, plans, permit, others) and total count
+ *     description: Returns the count of documents grouped by type (Agreement, Plans, Permit, Others) and total count
  *     responses:
  *       200:
  *         description: Document counts fetched successfully
@@ -746,18 +746,18 @@ exports.downloadDocument = async (req: MulterRequest, res: Response) => {
  *                           type: integer
  *                           example: 15
  *                           description: Count of Agreement documents
- *                         plans:
+ *                         Plans:
  *                           type: integer
  *                           example: 8
- *                           description: Count of plans documents
- *                         permit:
+ *                           description: Count of Plans documents
+ *                         Permit:
  *                           type: integer
  *                           example: 12
- *                           description: Count of permit documents
- *                         others:
+ *                           description: Count of Permit documents
+ *                         Others:
  *                           type: integer
  *                           example: 5
- *                           description: Count of other documents
+ *                           description: Count of Others documents
  *                         total:
  *                           type: integer
  *                           example: 40
