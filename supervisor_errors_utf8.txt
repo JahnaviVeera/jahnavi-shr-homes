@@ -1,0 +1,3 @@
+﻿src/modules/supervisor/supervisor.services.ts(96,20): error TS2353: Object literal may only specify known properties, and 'customer' does not exist in type 'ProjectInclude<DefaultArgs>'.
+src/modules/supervisor/supervisor.services.ts(372,20): error TS2353: Object literal may only specify known properties, and 'customer' does not exist in type 'ProjectInclude<DefaultArgs>'.
+src/modules/supervisor/supervisor.services.ts(401,20): error TS2353: Object literal may only specify known properties, and 'customer' does not exist in type 'ProjectInclude<DefaultArgs>'.

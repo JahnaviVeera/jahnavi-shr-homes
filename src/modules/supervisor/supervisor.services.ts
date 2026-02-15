@@ -462,8 +462,56 @@ export const getAssignedProjects = async (supervisorId: string) => {
     // Get all assigned projects with relations
     const projects = await prisma.project.findMany({
         where: { supervisorId },
-        include: { customer: true },
+        include: {
+            customer: true,
+            dailyUpdates: {
+                orderBy: { createdAt: 'desc' }
+            }
+        },
         orderBy: { createdAt: "desc" }
+    });
+
+    // Helper to format date
+    const formatDate = (date: Date | string | null): string | null => {
+        if (!date) return null;
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return typeof date === 'string' ? date : null;
+
+        const day = d.getDate().toString().padStart(2, '0');
+        const month = d.toLocaleString('en-US', { month: 'short' });
+        const year = d.getFullYear();
+
+        return `${day} ${month} ${year}`;
+    };
+
+    // Calculate progress for each project and format dates
+    const projectsWithProgress = projects.map(project => {
+        // Filter updates for this project that are APPROVED
+        const approvedUpdates = project.dailyUpdates.filter(u => u.status === 'approved'); // Status is Enum in DB but string in JS after Prisma fetch
+
+        // Count unique approved stages
+        const uniqueStages = new Set(approvedUpdates.map(u => u.constructionStage));
+        const totalStages = 6; // Total number of construction stages defined in enum
+
+        // Calculate percentage (capped at 100)
+        const progress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+
+        // Format Daily Updates dates
+        const formattedDailyUpdates = project.dailyUpdates.map(update => ({
+            ...update,
+            createdAt: formatDate(update.createdAt),
+            updatedAt: formatDate(update.updatedAt)
+        }));
+
+        return {
+            ...project,
+            startDate: formatDate(project.startDate),
+            expectedCompletion: formatDate(project.expectedCompletion),
+            createdAt: formatDate(project.createdAt),
+            updatedAt: formatDate(project.updatedAt),
+            progress,
+            dailyUpdates: formattedDailyUpdates
+        };
     });
 
     return {
@@ -471,7 +519,7 @@ export const getAssignedProjects = async (supervisorId: string) => {
         supervisorName: supervisor.fullName,
         supervisorEmail: supervisor.email,
         assignedProjectsCount: projects.length,
-        projects: projects
+        projects: projectsWithProgress
     }
 };
 

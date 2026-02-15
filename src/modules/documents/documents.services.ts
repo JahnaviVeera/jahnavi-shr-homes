@@ -29,7 +29,7 @@ export const createDocument = async (
         throw new Error("File is required");
     }
 
-    const validTypes = ["Agreement", "plans", "permit", "others"];
+    const validTypes = ["Agreement", "Plans", "Permit", "Others"];
     if (!validTypes.includes(data.documentType)) {
         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
     }
@@ -202,7 +202,7 @@ export const getAllDocuments = async (
 
 
 // export const getDocumentsByType = async (documentType: string, userContext?: { userId: string, role: string }) => {
-//     const validTypes = ["Agreement", "plans", "permit", "others"];
+//     const validTypes = ["Agreement", "Plans", "Permit", "Others"];
 //     if (!validTypes.includes(documentType)) {
 //         throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
 //     }
@@ -319,7 +319,7 @@ export const updateDocument = async (
 
     // Update document type if provided
     if (updateData.documentType !== undefined) {
-        const validTypes = ["Agreement", "plans", "permit", "others"];
+        const validTypes = ["Agreement", "Plans", "Permit", "Others"];
         if (!validTypes.includes(updateData.documentType)) {
             throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
         }
@@ -443,9 +443,9 @@ export const getDocumentCountsByType = async () => {
     // Initialize all types with 0
     const result: any = {
         Agreement: 0,
-        plans: 0,
-        permit: 0,
-        others: 0,
+        Plans: 0,
+        Permit: 0,
+        Others: 0,
         total: 0
     };
 

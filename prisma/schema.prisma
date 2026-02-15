@@ -70,7 +70,7 @@ enum DocumentType {
   Agreement
   Plans
   Permit
-  Other
+  Others
 
   @@map("documents_documenttype_enum")
 }

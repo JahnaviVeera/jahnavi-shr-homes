@@ -201,6 +201,25 @@ const options = {
               type: "string",
               format: "date-time",
             },
+            progress: {
+              type: "integer",
+              example: 50,
+              description: "Project completion progress percentage"
+            },
+            dailyUpdates: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  dailyUpdateId: { type: "string", format: "uuid" },
+                  constructionStage: { type: "string" },
+                  description: { type: "string" },
+                  status: { type: "string" },
+                  createdAt: { type: "string", format: "date-time" }
+                }
+              },
+              description: "Timeline of daily updates for the project"
+            },
           },
         },
         Supervisor: {

@@ -109,28 +109,13 @@ export const createQuotation = async (data:
 
 // ... (format functions)
 
-// Helper function to format quotation ID (QU0001 format)
-const formatQuotationId = (quotationId: string, index?: number): string => {
-    // If index is provided, use it for sequential numbering
-    if (index !== undefined) {
-        return `QU${String(index + 1).padStart(4, '0')}`;
-    }
-    // Otherwise, extract number from UUID or use a hash
-    // For now, we'll use a simple approach - extract first 4 chars and convert
-    const hash = quotationId.split('-')[0] || quotationId.substring(0, 8);
-    const num = parseInt(hash.substring(0, 4), 16) % 10000;
-    return `QU${String(num).padStart(4, '0')}`;
-};
 
 // Helper function to format quotation response
 const formatQuotationResponse = (quotation: any, index?: number) => {
-    const formattedId = formatQuotationId(quotation.quotationId, index);
-
     // Prefer explicit relation if loaded, otherwise try nested project.customer
     const customer = quotation.user || quotation.project?.customer;
 
     return {
-        id: formattedId,
         quotationId: quotation.quotationId,
         projectName: quotation.project?.projectName || null,
         customerName: quotation.customerName || customer?.userName || null,

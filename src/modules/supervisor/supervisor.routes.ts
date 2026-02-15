@@ -123,6 +123,23 @@ router.get("/:supervisorId/assigned-projects-count", authenticate, authorizeRole
  *                                 format: date
  *                               totalBudget:
  *                                 type: number
+ *                               progress:
+ *                                 type: integer
+ *                               dailyUpdates:
+ *                                 type: array
+ *                                 items:
+ *                                   type: object
+ *                                   properties:
+ *                                     dailyUpdateId:
+ *                                       type: string
+ *                                       format: uuid
+ *                                     constructionStage:
+ *                                       type: string
+ *                                     description:
+ *                                       type: string
+ *                                     createdAt:
+ *                                       type: string
+ *                                       format: date-time
  *                               user:
  *                                 type: object
  *                                 properties:
