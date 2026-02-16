@@ -80,6 +80,22 @@ export const createSupervisor = async (data: {
         }
     });
 
+    // Notify supervisor about assigned projects
+    if (data.projectIds && data.projectIds.length > 0) {
+        const projects = await prisma.project.findMany({
+            where: { projectId: { in: data.projectIds } },
+            select: { projectName: true }
+        });
+
+        for (const project of projects) {
+            await notifyUser(
+                savedUser.userId,
+                `You have been assigned to a new project: ${project.projectName}`,
+                "PROJECT_ASSIGNED"
+            );
+        }
+    }
+
     // Remove password from response
     const { password: _, ...supervisorWithoutPassword } = savedSupervisor;
 
@@ -278,6 +294,22 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         where: { supervisorId },
         data: dataToUpdate,
     });
+
+    // Notify supervisor about newly assigned projects
+    if (updateData.projectIds && updateData.projectIds.length > 0) {
+        const projects = await prisma.project.findMany({
+            where: { projectId: { in: updateData.projectIds } },
+            select: { projectName: true }
+        });
+
+        for (const project of projects) {
+            await notifyUser(
+                supervisor.userId,
+                `You have been assigned to a new project: ${project.projectName}`,
+                "PROJECT_ASSIGNED"
+            );
+        }
+    }
 
     // Remove password from response
     const { password: _, ...supervisorWithoutPassword } = updatedSupervisor;
@@ -521,6 +553,65 @@ export const getAssignedProjects = async (supervisorId: string) => {
         assignedProjectsCount: projects.length,
         projects: projectsWithProgress
     }
+};
+
+/**
+ * Change supervisor password
+ * @param supervisorId - The supervisor ID
+ * @param currentPassword - Current password
+ * @param newPassword - New password
+ * @returns Success message
+ */
+export const changeSupervisorPassword = async (
+    supervisorId: string,
+    currentPassword: string,
+    newPassword: string
+) => {
+    if (!supervisorId) {
+        throw new Error("Supervisor ID is required");
+    }
+
+    const supervisor = await prisma.supervisor.findUnique({
+        where: { supervisorId }
+    });
+
+    if (!supervisor) {
+        throw new Error("Supervisor not found");
+    }
+
+    // Verify current password
+    if (!supervisor.password) {
+        throw new Error("Supervisor does not have a password set");
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword.trim(), supervisor.password);
+    if (!isMatch) {
+        throw new Error("Current password is incorrect");
+    }
+
+    // Update with new password
+    const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+    await prisma.supervisor.update({
+        where: { supervisorId },
+        data: {
+            password: hashedPassword,
+            updatedAt: new Date()
+        }
+    });
+
+    // Also update the user table password
+    if (supervisor.userId) {
+        await prisma.user.update({
+            where: { userId: supervisor.userId },
+            data: {
+                password: hashedPassword,
+                updatedAt: new Date()
+            }
+        });
+    }
+
+    return { success: true, message: "Supervisor password updated successfully" };
 };
 
 

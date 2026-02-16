@@ -44,6 +44,9 @@ router.get("/dashboard-stats", authenticate, authorizeRoles("customer"), UserCon
 
 router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.changeUserPassword);
 
+// Customer-specific password change
+router.post("/:userId/change-password", authenticate, authorizeRoles("customer", "admin"), UserController.changeCustomerPassword);
+
 
 router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getuserById);
 

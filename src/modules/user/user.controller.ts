@@ -1157,22 +1157,43 @@ exports.updateUserProfile = async (req: AuthRequest, res: Response) => {
  */
 exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
     try {
-        const userId = req.user?.userId;
-        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+        const { currentPassword, newPassword, confirmNewPassword, contact, phoneNumber, userName } = req.body;
+        let userId = req.body.userId; // Allow specific userId from body
 
         if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized" });
+            userId = req.user?.userId;
         }
 
-        if (newPassword !== confirmNewPassword) {
-            return res.status(400).json({ success: false, message: "New passwords do not match" });
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID required" });
         }
 
-        const result = await UserServices.changePassword(userId, currentPassword, newPassword);
+        // 1. Handle Password Change if requested
+        if (newPassword && newPassword.trim() !== "") {
+            if (newPassword !== confirmNewPassword) {
+                return res.status(400).json({ success: false, message: "New passwords do not match" });
+            }
+            if (!currentPassword) {
+                return res.status(400).json({ success: false, message: "Current password is required to change password" });
+            }
+            // This service method checks current password and updates to new
+            await UserServices.changePassword(userId, currentPassword, newPassword);
+        }
+
+        // 2. Handle Profile Update (Phone/Name)
+        const updateData: any = {};
+        // Map 'phoneNumber' from request to 'contact' in DB if present
+        if (contact) updateData.contact = contact;
+        if (phoneNumber) updateData.contact = phoneNumber;
+        if (userName) updateData.userName = userName;
+
+        if (Object.keys(updateData).length > 0) {
+            await UserServices.updateUser(userId, updateData);
+        }
 
         return res.status(200).json({
             success: true,
-            message: result.message,
+            message: "Profile and/or password updated successfully",
             data: {}
         });
     } catch (error) {
@@ -1371,6 +1392,114 @@ exports.getAdminDashboardStats = async (req: Request, res: Response) => {
             success: true,
             message: "Admin dashboard stats fetched successfully",
             data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/{userId}/change-password:
+ *   post:
+ *     summary: Change customer password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "OldPassword123"
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *               confirmNewPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Bad request - Validation error or incorrect password
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ */
+exports.changeCustomerPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const loggedInUser = req.user;
+
+        if (!loggedInUser) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Logic check: User can only change their OWN password. Admin can change ANY.
+        if (loggedInUser.role !== 'admin' && loggedInUser.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You can only change your own password"
+            });
+        }
+
+        // Safety check: ensure req.body exists
+        if (!req.body) {
+            console.error(`[ChangeCustomerPassword] req.body is undefined. Content-Type: ${req.headers['content-type']}`);
+            return res.status(400).json({
+                success: false,
+                message: "Request body is missing. Please ensure you are sending JSON data with 'Content-Type: application/json' header."
+            });
+        }
+
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        // Validate required fields
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password, new password, and confirm password are required"
+            });
+        }
+
+        // Validate new passwords match
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirm password do not match"
+            });
+        }
+
+        // Change password
+        const result = await UserServices.changeCustomerPassword(
+            userId,
+            currentPassword,
+            newPassword
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
         });
     } catch (error) {
         return res.status(400).json({

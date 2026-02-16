@@ -31,6 +31,9 @@ router.get("/profile", authenticate, authorizeRoles("supervisor"), SupervisorCon
 // Update my profile (Authenticated Supervisor) - Must come before /:supervisorId route
 router.put("/profile", authenticate, authorizeRoles("supervisor"), SupervisorController.updateProfile);
 
+// Change supervisor password (Authenticated Supervisor or Admin)
+router.post("/:supervisorId/change-password", authenticate, authorizeRoles("admin", "supervisor"), SupervisorController.changeSupervisorPassword);
+
 /**
  * @swagger
  * /api/supervisor/my-projects:

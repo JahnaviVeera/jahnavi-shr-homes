@@ -80,9 +80,13 @@ exports.updateProfile = async (req: AuthenticatedRequest, res: Response) => {
             return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
         }
 
-        const userId = req.user.userId;
+        let userId = req.body.userId;
         if (!userId) {
-            return res.status(404).json({ success: false, message: "User ID not found in token" });
+            userId = req.user?.userId;
+        }
+
+        if (!userId) {
+            return res.status(404).json({ success: false, message: "User ID required" });
         }
 
         // Resolve supervisorId from userId
@@ -664,6 +668,114 @@ exports.getMyAssignedProjects = async (req: AuthenticatedRequest, res: Response)
             success: true,
             message: "Assigned projects fetched successfully",
             data: result.projects
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/supervisor/{supervisorId}/change-password:
+ *   post:
+ *     summary: Change supervisor password
+ *     tags: [Supervisors]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: supervisorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The supervisor ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "OldPassword123"
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *               confirmNewPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Bad request - Validation error or incorrect password
+ *       401:
+ *         description: Unauthorized - Supervisor authentication required
+ */
+exports.changeSupervisorPassword = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        let { supervisorId } = req.params;
+        const loggedInUser = req.user;
+
+        if (!loggedInUser) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Logic check: Supervisor can only change their OWN password.
+        // If they aren't an admin, we override the supervisorId to BE their own record.
+        // This prevents ID mismatch errors from the frontend.
+        if (loggedInUser.role !== 'admin') {
+            const supervisorRecord = await SupervisorServices.getSupervisorByUserId(loggedInUser.userId);
+            supervisorId = supervisorRecord.supervisorId;
+        }
+
+        // Safety check: ensure req.body exists
+        if (!req.body) {
+            console.error(`[ChangeSupervisorPassword] req.body is undefined. Content-Type: ${req.headers['content-type']}`);
+            return res.status(400).json({
+                success: false,
+                message: "Request body is missing. Please ensure you are sending JSON data with 'Content-Type: application/json' header."
+            });
+        }
+
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        // Validate required fields
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password, new password, and confirm password are required"
+            });
+        }
+
+        // Validate new passwords match
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirm password do not match"
+            });
+        }
+
+        // Change password
+        const result = await SupervisorServices.changeSupervisorPassword(
+            supervisorId,
+            currentPassword,
+            newPassword
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
         });
     } catch (error) {
         return res.status(400).json({
