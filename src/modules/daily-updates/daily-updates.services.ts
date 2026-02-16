@@ -646,6 +646,24 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
         }
     });
 
+    // Update Project Progress
+    const approvedUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: dailyUpdate.projectId,
+            status: DailyUpdateStatus.approved
+        },
+        select: { constructionStage: true }
+    });
+
+    const uniqueStages = new Set(approvedUpdates.map(u => u.constructionStage));
+    const totalStages = 6;
+    const newProgress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+
+    await prisma.project.update({
+        where: { projectId: dailyUpdate.projectId },
+        data: { progress: newProgress }
+    });
+
     // Notify Admins
     SocketService.getInstance().emitToRole("admin", "daily_update_status", {
         status: "APPROVED",

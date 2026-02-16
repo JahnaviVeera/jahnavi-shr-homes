@@ -1,5 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
-import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus } from "@prisma/client";
+import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage } from "@prisma/client";
+import { notifyUser } from "../notifications/notifications.services";
 
 // Helper function to format date inputs as YYYY-MM-DD strings
 const formatDateString = (dateInput: string | Date | undefined | null): string => {
@@ -126,11 +127,19 @@ export const createProject = async (data:
 
     // Notify Supervisor
     if (supervisor) {
+        // Socket notification for real-time
         SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
             type: "PROJECT_ASSIGNED",
             message: `You have been assigned to new project: ${newProject.projectName}`,
             projectId: newProject.projectId
         });
+
+        // Persistent notification for dashboard
+        await notifyUser(
+            supervisor.userId,
+            `You have been assigned to new project: ${newProject.projectName}`,
+            "PROJECT_ASSIGNED"
+        );
     }
 
     // Notify Customer
@@ -227,8 +236,14 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
         // Determine the correct index for ID generation
         const sequentialIndex = isPaginationEnabled ? ((page! - 1) * limit!) + index : index;
 
+        // Calculate progress
+        const uniqueStages = new Set(dailyUpdates.map((u: any) => u.constructionStage));
+        const totalStages = 6;
+        const calculatedProgress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+
         return {
             ...rest,
+            progress: calculatedProgress,
             startDate: formatToDDMMYYYY(project.startDate),
             expectedCompletion: formatToDDMMYYYY(project.expectedCompletion),
             id: formatProjectId(project.projectId, sequentialIndex)
@@ -370,11 +385,19 @@ export const updateProject = async (projectId: string, updateData: {
             where: { supervisorId: updatedProject.supervisorId }
         });
         if (supervisor) {
+            // Socket notification for real-time
             SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
                 type: "PROJECT_UPDATED",
                 message: `Project ${updatedProject.projectName} has been updated`,
                 projectId: updatedProject.projectId
             });
+
+            // Persistent notification for dashboard
+            await notifyUser(
+                supervisor.userId,
+                `Project ${updatedProject.projectName} has been updated`,
+                "PROJECT_UPDATED"
+            );
         }
     }
 
@@ -418,10 +441,74 @@ export const getProjectByProjectId = async (projectId: string) => {
         include: {
             customer: true,
             supervisor: true,
-            quotations: true
+            quotations: true,
+            dailyUpdates: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    constructionStage: true,
+                    status: true,
+                    updatedAt: true,
+                    createdAt: true
+                }
+            }
         }
     });
+
     if (!project) throw new Error(`Project with ID ${projectId} not found`);
+
+    // Calculate progress based on approved daily updates
+    const dailyUpdates = (project as any).dailyUpdates || [];
+    const uniqueApprovedStages = new Set(dailyUpdates
+        .filter((u: any) => u.status === DailyUpdateStatus.approved)
+        .map((u: any) => u.constructionStage));
+
+    const totalStages = 6;
+    const progress = Math.min(Math.round((uniqueApprovedStages.size / totalStages) * 100), 100);
+
+    // Build Construction Stages Timeline
+    const definedStages = [
+        "Foundation",
+        "Framing",
+        "Plumbing & Electrical",
+        "Interior Walls",
+        "Painting",
+        "Finishing"
+    ];
+
+    const constructionStages = definedStages.map(stage => {
+        let stageEnum: ConstructionStage;
+        if (stage === "Plumbing & Electrical") {
+            stageEnum = ConstructionStage.Plumbing___Electrical;
+        } else if (stage === "Interior Walls") {
+            stageEnum = ConstructionStage.Interior_Walls;
+        } else {
+            stageEnum = stage as ConstructionStage;
+        }
+
+        const stageUpdates = dailyUpdates.filter((u: any) => u.constructionStage === stageEnum);
+
+        let status = "Pending";
+        let date: Date | null = null;
+
+        if (stageUpdates.length > 0) {
+            const approved = stageUpdates.find((u: any) => u.status === DailyUpdateStatus.approved);
+            if (approved) {
+                status = "Completed";
+                date = approved.updatedAt;
+            } else {
+                const latest = stageUpdates[0];
+                status = "In Progress";
+                date = latest.createdAt;
+            }
+        }
+
+        return {
+            stage,
+            status,
+            date: date ? new Date(date).toISOString().split('T')[0] : null
+        };
+    });
+
 
     // Format dates to DD-MM-YYYY
     const formatToDDMMYYYY = (date: Date | string | null): string => {
@@ -433,8 +520,13 @@ export const getProjectByProjectId = async (projectId: string) => {
         return `${day}-${month}-${year}`;
     };
 
+    // Destructure to exclude dailyUpdates from the response
+    const { dailyUpdates: _, ...rest } = project; // usage of _ to verify it's unused
+
     return {
-        ...project,
+        ...rest,
+        progress, // Override stored progress
+        constructionStages, // Add timeline data
         startDate: formatToDDMMYYYY(project.startDate),
         expectedCompletion: formatToDDMMYYYY(project.expectedCompletion)
     };

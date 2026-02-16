@@ -607,3 +607,50 @@ export const approveSupervisor = async (userId: string) => {
 export const rejectSupervisor = async (userId: string) => {
     return { message: "Supervisor assignment rejected" };
 };
+
+/**
+ * Change customer password
+ * @param userId - The customer user ID
+ * @param currentPassword - Current password
+ * @param newPassword - New password
+ * @returns Success message
+ */
+export const changeCustomerPassword = async (
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+) => {
+    const user = await prisma.user.findUnique({ where: { userId } });
+
+    if (!user) {
+        throw new Error("Customer not found");
+    }
+
+    // Verify user is a customer
+    if (user.role !== UserRole.customer) {
+        throw new Error("This endpoint is only for customer users");
+    }
+
+    // Verify current password
+    if (!user.password) {
+        throw new Error("Customer does not have a password set");
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword.trim(), user.password);
+    if (!isMatch) {
+        throw new Error("Current password is incorrect");
+    }
+
+    // Update with new password
+    const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
+
+    await prisma.user.update({
+        where: { userId },
+        data: {
+            password: hashedPassword,
+            updatedAt: new Date()
+        }
+    });
+
+    return { success: true, message: "Customer password updated successfully" };
+};
