@@ -5,6 +5,7 @@ export const createMaterial = async (data: {
     projectId: string;
     materialName: string;
     quantity: number;
+    units?: string;
     date: Date | string;
     notes?: string | null;
     vendor?: string | null;
@@ -64,6 +65,7 @@ export const createMaterial = async (data: {
             projectId: data.projectId,
             materialName: data.materialName,
             quantity: quantity,
+            units: data.units as any,
             date: parsedDate.toISOString().split('T')[0] ?? "",
             notes: data.notes || null,
             vendor: data.vendor || null,
@@ -206,6 +208,7 @@ export const getTotalMaterialCountByProject = async (projectId: string, supervis
 export const updateMaterial = async (materialId: string, updateData: {
     materialName?: string;
     quantity?: number;
+    units?: string;
     date?: Date | string;
     notes?: string | null;
     vendor?: string | null;
@@ -263,6 +266,10 @@ export const updateMaterial = async (materialId: string, updateData: {
 
     if (quantity !== undefined) {
         dataToUpdate.quantity = quantity;
+    }
+
+    if (updateData.units !== undefined) {
+        dataToUpdate.units = updateData.units;
     }
 
     if (updateData.date !== undefined) {

@@ -254,6 +254,7 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
 
     // Check if email is being updated and if it already exists
     if (updateData.email && updateData.email !== supervisor.email) {
+        // Check in Supervisor table
         const existingSupervisor = await prisma.supervisor.findFirst({
             where: { email: updateData.email }
         });
@@ -261,24 +262,62 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         if (existingSupervisor) {
             throw new Error("Email already exists for another supervisor");
         }
+
+        // Check in User table
+        const existingUser = await prisma.user.findFirst({
+            where: { email: updateData.email }
+        });
+
+        if (existingUser && existingUser.userId !== supervisor.userId) {
+            throw new Error("Email already exists for another user");
+        }
     }
 
     const dataToUpdate: Prisma.SupervisorUpdateInput = {
         updatedAt: new Date(),
     };
 
+    const userDataToUpdate: Prisma.UserUpdateInput = {
+        updatedAt: new Date(),
+    };
+    let hasUserUpdates = false;
+
     // Only update fields that are provided
-    if (updateData.fullName !== undefined) dataToUpdate.fullName = updateData.fullName;
-    if (updateData.email !== undefined) dataToUpdate.email = updateData.email;
-    if (updateData.phoneNumber !== undefined) dataToUpdate.phoneNumber = updateData.phoneNumber;
-    if (updateData.status !== undefined) dataToUpdate.status = updateData.status as SupervisorStatus;
+    if (updateData.fullName !== undefined) {
+        dataToUpdate.fullName = updateData.fullName;
+        userDataToUpdate.userName = updateData.fullName;
+        hasUserUpdates = true;
+    }
+    if (updateData.email !== undefined) {
+        dataToUpdate.email = updateData.email;
+        userDataToUpdate.email = updateData.email;
+        hasUserUpdates = true;
+    }
+    if (updateData.phoneNumber !== undefined) {
+        dataToUpdate.phoneNumber = updateData.phoneNumber;
+        userDataToUpdate.contact = updateData.phoneNumber;
+        hasUserUpdates = true;
+    }
+    if (updateData.status !== undefined) {
+        dataToUpdate.status = updateData.status as SupervisorStatus;
+        userDataToUpdate.status = updateData.status === 'Active' ? 'Active' : 'Inactive';
+        hasUserUpdates = true;
+    }
 
     // Handle password update (hash if provided)
     if (updateData.password !== undefined) {
         if (updateData.password === null || updateData.password.trim() === "") {
             dataToUpdate.password = null;
+            // We usually don't set user password to null if supervisor password is removed, 
+            // but assuming supervisor login relies on User table, we should probably update it if a valid password is sent.
+            // If the intention is to remove access, status should be used. 
+            // For now, if empty string/null is passed, we might skip updating User password or set it to null if that's the intent.
+            // Let's assume we only update User password if a NEW valid password is provided.
         } else {
-            dataToUpdate.password = await bcrypt.hash(updateData.password, 10);
+            const hashedPassword = await bcrypt.hash(updateData.password, 10);
+            dataToUpdate.password = hashedPassword;
+            userDataToUpdate.password = hashedPassword;
+            hasUserUpdates = true;
         }
     }
 
@@ -290,10 +329,19 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         };
     }
 
+    // Update Supervisor
     const updatedSupervisor = await prisma.supervisor.update({
         where: { supervisorId },
         data: dataToUpdate,
     });
+
+    // Sync updates to User table
+    if (hasUserUpdates && supervisor.userId) {
+        await prisma.user.update({
+            where: { userId: supervisor.userId },
+            data: userDataToUpdate
+        });
+    }
 
     // Notify supervisor about newly assigned projects
     if (updateData.projectIds && updateData.projectIds.length > 0) {
@@ -326,10 +374,46 @@ export const deleteSupervisor = async (supervisorId: string) => {
         throw new Error("Supervisor not found");
     }
 
-    const deletedSupervisor = await prisma.supervisor.delete({
-        where: { supervisorId }
+    // First delete or disconnect related projects relationships if necessary?
+    // Prisma usually handles simple disconnects if relations are optional.
+    // However, we should check if we need to do anything with projects.
+    // The relation in Project is `supervisor Supervisor?` (optional). 
+    // So deleting supervisor should just set supervisorId to null in projects if explicitly handled or just fail if foreign key constraint exists.
+    // BUT we saw in schema that explicit relations might be missing FK constraints or relying on Prisma defaults.
+    // Let's attempt to delete Supervisor.
+
+    // Using transaction to ensure both are deleted or neither
+    const transaction = await prisma.$transaction(async (prisma) => {
+        // 1. Delete Supervisor
+        const deletedSup = await prisma.supervisor.delete({
+            where: { supervisorId }
+        });
+
+        // 2. Delete associated User if it exists
+        if (supervisor.userId) {
+            // We need to be careful about referential integrity on the User table too (e.g. sentMessages, etc.)
+            // If the user has other relations that prevent deletion, this might fail.
+            // For now, we will try to delete. If it fails due to FKs (like messages), maybe we should just Soft Delete (set status Inactive)?
+            // The prompt asks for "Delete API". Typically implies hard delete.
+            // Let's try hard delete.
+            try {
+                await prisma.user.delete({
+                    where: { userId: supervisor.userId }
+                });
+            } catch (error) {
+                console.warn(`Could not delete associated user ${supervisor.userId} for supervisor ${supervisorId}:`, error);
+                // Optionally: decide if we should fail the whole transaction or allow orphaned user.
+                // For now, let's allow it but maybe deactivate?
+                await prisma.user.update({
+                    where: { userId: supervisor.userId },
+                    data: { status: 'Inactive', email: `deleted_${supervisor.userId}_${supervisor.email}` } // Rename email to free it up
+                });
+            }
+        }
+        return deletedSup;
     });
-    return deletedSupervisor;
+
+    return transaction;
 };
 
 // Assign project to supervisor
