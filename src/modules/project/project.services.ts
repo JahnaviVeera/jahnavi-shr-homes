@@ -1,5 +1,5 @@
 ﻿import prisma from "../../config/prisma.client";
-import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage } from "@prisma/client";
+import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
 
 // Helper function to format date inputs as YYYY-MM-DD strings
@@ -442,6 +442,12 @@ export const getProjectByProjectId = async (projectId: string) => {
             customer: true,
             supervisor: true,
             quotations: true,
+            payments: {
+                select: {
+                    amount: true,
+                    paymentStatus: true
+                }
+            },
             dailyUpdates: {
                 orderBy: { createdAt: 'desc' },
                 select: {
@@ -464,6 +470,21 @@ export const getProjectByProjectId = async (projectId: string) => {
 
     const totalStages = 6;
     const progress = Math.min(Math.round((uniqueApprovedStages.size / totalStages) * 100), 100);
+
+    // Calculate Budget Summary
+    const payments = (project as any).payments || [];
+    const totalPaid = payments
+        .filter((p: any) => p.paymentStatus === PaymentStatus.completed)
+        .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+    const totalBudget = Number(project.totalBudget);
+    const remainingBalance = totalBudget - totalPaid;
+
+    const budgetSummary = {
+        totalBudget: project.totalBudget, // Return original format
+        totalPaid,
+        remainingBalance
+    };
 
     // Build Construction Stages Timeline
     const definedStages = [
@@ -520,12 +541,13 @@ export const getProjectByProjectId = async (projectId: string) => {
         return `${day}-${month}-${year}`;
     };
 
-    // Destructure to exclude dailyUpdates from the response
-    const { dailyUpdates: _, ...rest } = project; // usage of _ to verify it's unused
+    // Destructure to exclude dailyUpdates and payments from the response (payments are now summarized)
+    const { dailyUpdates: _, payments: __, ...rest } = project as any;
 
     return {
         ...rest,
         progress, // Override stored progress
+        budgetSummary, // Add budget summary
         constructionStages, // Add timeline data
         startDate: formatToDDMMYYYY(project.startDate),
         expectedCompletion: formatToDDMMYYYY(project.expectedCompletion)

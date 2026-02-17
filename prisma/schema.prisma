@@ -129,6 +129,7 @@ enum Currency {
   USD @map("USD ($)")
   EUR @map("EUR (€)")
   GBP @map("GBP (£)")
+  INR @map("INR (₹)")
 
   @@map("currencies_enum")
 }
@@ -162,7 +163,7 @@ model User {
 
   // General Settings
   timezone Timezone? @default(UTC)
-  currency Currency? @default(USD)
+  currency Currency? @default(INR)
   language Language? @default(English)
   address  String?   @db.VarChar(255)
 
