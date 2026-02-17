@@ -506,9 +506,21 @@ export const getDailyUpdatesForUser = async (userId: string) => {
         }
     });
 
-    // 4. Map progress to each daily update's project
+    // 4. Map progress to each daily update's project AND parse rawMaterials
     const updatesWithProgress = dailyUpdates.map(update => {
-        if (!update.project) return update;
+
+        // Parse rawMaterials
+        let parsedRawMaterials = update.rawMaterials;
+        if (typeof update.rawMaterials === 'string') {
+            try {
+                parsedRawMaterials = JSON.parse(update.rawMaterials);
+            } catch (e) {
+                parsedRawMaterials = [];
+            }
+        }
+        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        if (!update.project) return { ...update, rawMaterials: parsedRawMaterials };
 
         const approvedForThisProject = allApprovedUpdates.filter(u => u.projectId === update.projectId);
         const uniqueStages = new Set(approvedForThisProject.map(u => u.constructionStage));
@@ -517,6 +529,7 @@ export const getDailyUpdatesForUser = async (userId: string) => {
 
         return {
             ...update,
+            rawMaterials: parsedRawMaterials,
             project: {
                 ...update.project,
                 progress: progress
@@ -569,7 +582,26 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
         }
     });
 
-    return dailyUpdates;
+    // Parse rawMaterials
+    const parsedUpdates = dailyUpdates.map(update => {
+        let parsedRawMaterials = update.rawMaterials;
+        if (typeof update.rawMaterials === 'string') {
+            try {
+                parsedRawMaterials = JSON.parse(update.rawMaterials);
+            } catch (e) {
+                console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
+                parsedRawMaterials = [];
+            }
+        }
+        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        return {
+            ...update,
+            rawMaterials: parsedRawMaterials
+        };
+    });
+
+    return parsedUpdates;
 };
 
 /**
@@ -604,7 +636,26 @@ export const getDailyUpdatesByStatus = async (status: string, supervisorId?: str
         prisma.dailyUpdate.count({ where })
     ]);
 
-    return { updates, count };
+    // Parse rawMaterials
+    const parsedUpdates = updates.map(update => {
+        let parsedRawMaterials = update.rawMaterials;
+        if (typeof update.rawMaterials === 'string') {
+            try {
+                parsedRawMaterials = JSON.parse(update.rawMaterials);
+            } catch (e) {
+                console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
+                parsedRawMaterials = [];
+            }
+        }
+        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        return {
+            ...update,
+            rawMaterials: parsedRawMaterials
+        };
+    });
+
+    return { updates: parsedUpdates, count };
 };
 
 /**

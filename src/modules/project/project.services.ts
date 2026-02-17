@@ -201,6 +201,12 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
             dailyUpdates: {
                 where: { status: DailyUpdateStatus.approved },
                 select: { constructionStage: true }
+            },
+            payments: {
+                select: {
+                    amount: true,
+                    paymentStatus: true
+                }
             }
         },
         orderBy: { createdAt: 'desc' } // Order by creation time
@@ -221,7 +227,27 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
         // Exclude the big dailyUpdates array from the final response to keep it clean.
         // We need to cast project to any or specific type because Prisma includes types are complex
         const p = project as any;
-        const { dailyUpdates, ...rest } = p;
+        const { dailyUpdates, payments, ...rest } = p;
+
+        // Calculate Budget Summary
+        const totalPaid = (payments || [])
+            .filter((p: any) => p.paymentStatus === PaymentStatus.completed)
+            .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+        const totalBudget = Number(project.totalBudget);
+        const remainingBalance = totalBudget - totalPaid;
+
+        // Calculate payment progress percentage
+        const paymentProgress = totalBudget > 0
+            ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
+            : 0;
+
+        const budgetSummary = {
+            totalBudget: project.totalBudget,
+            totalPaid,
+            remainingBalance,
+            paymentProgress
+        };
 
         // Format dates to DD-MM-YYYY
         const formatToDDMMYYYY = (date: Date | string | null): string => {
@@ -243,6 +269,7 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
 
         return {
             ...rest,
+            budgetSummary, // Add budget summary to list view
             progress: calculatedProgress,
             startDate: formatToDDMMYYYY(project.startDate),
             expectedCompletion: formatToDDMMYYYY(project.expectedCompletion),
@@ -480,10 +507,16 @@ export const getProjectByProjectId = async (projectId: string) => {
     const totalBudget = Number(project.totalBudget);
     const remainingBalance = totalBudget - totalPaid;
 
+    // Calculate payment progress percentage
+    const paymentProgress = totalBudget > 0
+        ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
+        : 0;
+
     const budgetSummary = {
         totalBudget: project.totalBudget, // Return original format
         totalPaid,
-        remainingBalance
+        remainingBalance,
+        paymentProgress // Added payment progress percentage
     };
 
     // Build Construction Stages Timeline
