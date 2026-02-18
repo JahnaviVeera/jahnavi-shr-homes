@@ -362,8 +362,34 @@ export const getPaymentByPaymentId = async (paymentId: string) => {
  * Calculates: Total Budget, Payment Received, Payment Pending
  */
 export const getBudgetSummary = async (supervisorId?: string, customerId?: string) => {
+    // If user is a customer, we prioritize their estimated investment from their profile
+    // But the requirement says "the totalbuget has to be the investment that initially the customer provided OR it can be taken from the project"
+    // Let's first try to get the customer's estimated investment if customerId is provided.
+
+    let totalBudget = 0;
+
+    if (customerId) {
+        // Fetch customer details directly here or via a user service if strict decoupling is needed.
+        // Importing prisma here is already done.
+        const customer = await prisma.user.findUnique({
+            where: { userId: customerId },
+            select: { estimatedInvestment: true }
+        });
+
+        if (customer && customer.estimatedInvestment) {
+            totalBudget = parseFloat(customer.estimatedInvestment.toString());
+        }
+    }
+
     // Get all relevant projects with their budgets (Decoupled)
     const projects = await projectService.getAllProjectsBudgets(supervisorId, customerId);
+
+    // If totalBudget is still 0 (not a customer or customer has no investment set), sum up project budgets
+    if (totalBudget === 0) {
+        projects.forEach((project: any) => {
+            totalBudget += parseFloat(project.totalBudget.toString()) || 0;
+        });
+    }
 
     // Get project IDs for filtering payments
     const projectIds = projects.map(p => p.projectId);
@@ -383,30 +409,18 @@ export const getBudgetSummary = async (supervisorId?: string, customerId?: strin
         }
     });
 
-    // Create a map for quick lookup
-    const paymentMap = new Map();
-    paymentsByProject.forEach((item: any) => {
-        if (item.projectId) {
-            paymentMap.set(item.projectId, parseFloat(item._sum.amount?.toString() || "0"));
-        }
-    });
-
-    // Calculate totals
-    let totalBudget = 0;
+    // Calculate total payments received
     let totalPaymentReceived = 0;
-
-    projects.forEach((project: any) => {
-        const budget = parseFloat(project.totalBudget.toString()) || 0;
-        const received = paymentMap.get(project.projectId) || 0;
-        totalBudget += budget;
-        totalPaymentReceived += received;
+    paymentsByProject.forEach((item: any) => {
+        totalPaymentReceived += parseFloat(item._sum.amount?.toString() || "0");
     });
 
     const totalPaymentPending = totalBudget - totalPaymentReceived;
 
     // Calculate payment progress percentage
+    // Use toFixed(2) for decimal precision then convert back to number
     const progressPercentage = totalBudget > 0
-        ? Math.round((totalPaymentReceived / totalBudget) * 100)
+        ? Number(((totalPaymentReceived / totalBudget) * 100).toFixed(2))
         : 0;
 
     return {
@@ -457,6 +471,21 @@ export const getBudgetSummaryByProject = async (projectId: string) => {
     const paidAmount = parseFloat(completedPayments._sum.amount?.toString() || "0");
     const pendingAmount = parseFloat(pendingPayments._sum.amount?.toString() || "0");
 
+    // Get total expenses for this project
+    const expenses = await prisma.expense.aggregate({
+        _sum: {
+            amount: true
+        },
+        where: {
+            projectId: projectId
+        }
+    });
+
+    const totalExpense = parseFloat(expenses._sum.amount?.toString() || "0");
+    const budgetConsumed = totalBudget > 0
+        ? Math.round((totalExpense / totalBudget) * 100)
+        : 0;
+
     // Calculate payment progress percentage
     const progressPercentage = totalBudget > 0
         ? Math.round((paidAmount / totalBudget) * 100)
@@ -468,6 +497,8 @@ export const getBudgetSummaryByProject = async (projectId: string) => {
         totalBudget: Math.round(totalBudget * 100) / 100,
         paidAmount: Math.round(paidAmount * 100) / 100,
         pendingAmount: Math.round(pendingAmount * 100) / 100,
-        progressPercentage: progressPercentage
+        progressPercentage: progressPercentage,
+        totalExpense: Math.round(totalExpense * 100) / 100,
+        budgetConsumed: budgetConsumed
     };
 };

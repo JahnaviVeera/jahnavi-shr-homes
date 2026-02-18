@@ -5,6 +5,16 @@ import * as projectService from "../project/project.services";
 import { notifyUser } from "../notifications/notifications.services";
 import SocketService from "../../services/socket.service";
 
+const formatBytes = (bytes: number, decimals = 2) => {
+    if (!bytes) return '0 Bytes';
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
 export const createDocument = async (
     data: {
         documentType: string;
@@ -18,6 +28,7 @@ export const createDocument = async (
         buffer: Buffer;
         originalname: string;
         mimetype: string;
+        size: number;
     }
 ) => {
     // Validate required fields
@@ -57,6 +68,7 @@ export const createDocument = async (
         fileName: file.originalname,
         fileType: file.mimetype,
         fileUrl: fileUrl,
+        fileSize: formatBytes(file.size),
         fileId: fileId,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -273,6 +285,7 @@ export const getDocumentsByProject = async (projectId: string, userContext?: { u
         fileType: doc.fileType,
         fileUrl: doc.fileUrl,
         description: doc.description || null,
+        fileSize: doc.fileSize,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt
     }));
@@ -305,6 +318,7 @@ export const updateDocument = async (
         buffer: Buffer;
         originalname: string;
         mimetype: string;
+        size: number;
     }
 ) => {
     const document = await prisma.document.findUnique({ where: { documentId } });
@@ -363,6 +377,7 @@ export const updateDocument = async (
             dataToUpdate.fileData = Buffer.from([]); // keeping it compatible
             dataToUpdate.fileName = file.originalname;
             dataToUpdate.fileType = file.mimetype;
+            dataToUpdate.fileSize = formatBytes(file.size);
             dataToUpdate.fileUrl = uploadResult.publicUrl;
             dataToUpdate.fileId = uploadResult.id;
         } catch (error) {
