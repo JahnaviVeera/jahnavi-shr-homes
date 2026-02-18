@@ -315,6 +315,7 @@ exports.getAllSupervisors = async (req: Request, res: Response) => {
  *                 type: string
  *                 maxLength: 15
  *                 example: "9876543210"
+ *                 description: "Primary phone number (also accepts 'phone')"
  *               password:
  *                 type: string
  *                 format: password
@@ -324,6 +325,7 @@ exports.getAllSupervisors = async (req: Request, res: Response) => {
  *                 type: string
  *                 enum: ["Active", "Inactive"]
  *                 example: "Active"
+ *                 description: "Status of the supervisor (Active/Inactive)"
  *               projectIds:
  *                 type: array
  *                 items:
