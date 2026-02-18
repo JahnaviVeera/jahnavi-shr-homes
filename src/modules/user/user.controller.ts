@@ -133,7 +133,8 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
 //GETALL
 exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await UserServices.getAllUsers();
+        const search = req.query.search as string;
+        const users = await UserServices.getAllUsers(search);
         return res.status(200).json({
             success: true,
             message: "Users fetched successfully",

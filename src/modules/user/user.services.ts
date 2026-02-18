@@ -113,8 +113,19 @@ export const getUserById = async (userId: string) => {
     return { ...user, projects };
 }
 
-export const getAllUsers = async () => {
+export const getAllUsers = async (search?: string) => {
+    const where: any = {};
+
+    if (search) {
+        where.OR = [
+            { userName: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { companyName: { contains: search, mode: "insensitive" } }
+        ];
+    }
+
     const users = await prisma.user.findMany({
+        where,
         select: {
             userId: true,
             userName: true,
