@@ -330,6 +330,7 @@ model Document {
   fileType     String       @db.VarChar(100)
   fileId       String?      @map("file_id") @db.VarChar(255)
   fileUrl      String?      @db.Text
+  fileSize     String?      @map("file_size") @db.VarChar(50)
   description  String?      @db.VarChar(500)
 
   projectId String?  @db.Uuid

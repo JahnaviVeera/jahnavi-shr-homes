@@ -207,6 +207,11 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
                     amount: true,
                     paymentStatus: true
                 }
+            },
+            expenses: {
+                select: {
+                    amount: true
+                }
             }
         },
         orderBy: { createdAt: 'desc' } // Order by creation time
@@ -227,7 +232,7 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
         // Exclude the big dailyUpdates array from the final response to keep it clean.
         // We need to cast project to any or specific type because Prisma includes types are complex
         const p = project as any;
-        const { dailyUpdates, payments, ...rest } = p;
+        const { dailyUpdates, payments, expenses, ...rest } = p;
 
         // Calculate Budget Summary
         const totalPaid = (payments || [])
@@ -237,16 +242,26 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
         const totalBudget = Number(project.totalBudget);
         const remainingBalance = totalBudget - totalPaid;
 
+        // Calculate total expenses and budget used
+        const totalExpense = (expenses || [])
+            .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+
+        const totalBudgetUsed = totalBudget > 0
+            ? Number(((totalExpense / totalBudget) * 100).toFixed(2))
+            : 0;
+
         // Calculate payment progress percentage
         const paymentProgress = totalBudget > 0
-            ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
+            ? Number(((totalPaid / totalBudget) * 100).toFixed(2))
             : 0;
 
         const budgetSummary = {
             totalBudget: project.totalBudget,
             totalPaid,
-            remainingBalance,
-            paymentProgress
+            remainingBalance, // Cash remaining
+            paymentProgress, // Payment based progress
+            totalExpense, // Incurred expenses
+            totalBudgetUsed // Expense based progress
         };
 
         // Format dates to DD-MM-YYYY
@@ -412,18 +427,24 @@ export const updateProject = async (projectId: string, updateData: {
             where: { supervisorId: updatedProject.supervisorId }
         });
         if (supervisor) {
+            const isNewAssignment = project.supervisorId !== updatedProject.supervisorId;
+            const notificationType = isNewAssignment ? "PROJECT_ASSIGNED" : "PROJECT_UPDATED";
+            const notificationMessage = isNewAssignment
+                ? `You have been assigned to project: ${updatedProject.projectName}`
+                : `Project ${updatedProject.projectName} has been updated`;
+
             // Socket notification for real-time
             SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
-                type: "PROJECT_UPDATED",
-                message: `Project ${updatedProject.projectName} has been updated`,
+                type: notificationType,
+                message: notificationMessage,
                 projectId: updatedProject.projectId
             });
 
             // Persistent notification for dashboard
             await notifyUser(
                 supervisor.userId,
-                `Project ${updatedProject.projectName} has been updated`,
-                "PROJECT_UPDATED"
+                notificationMessage,
+                notificationType
             );
         }
     }
@@ -469,6 +490,9 @@ export const getProjectByProjectId = async (projectId: string) => {
             customer: true,
             supervisor: true,
             quotations: true,
+            documents: true,
+            materials: true,
+            expenses: true,
             payments: {
                 select: {
                     amount: true,
@@ -507,16 +531,27 @@ export const getProjectByProjectId = async (projectId: string) => {
     const totalBudget = Number(project.totalBudget);
     const remainingBalance = totalBudget - totalPaid;
 
+    // Calculate total expenses
+    const expenses = (project as any).expenses || [];
+    const totalExpense = expenses
+        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+
+    const totalBudgetUsed = totalBudget > 0
+        ? Number(((totalExpense / totalBudget) * 100).toFixed(2))
+        : 0;
+
     // Calculate payment progress percentage
     const paymentProgress = totalBudget > 0
-        ? Math.min(Math.round((totalPaid / totalBudget) * 100), 100)
+        ? Number(((totalPaid / totalBudget) * 100).toFixed(2))
         : 0;
 
     const budgetSummary = {
         totalBudget: project.totalBudget, // Return original format
         totalPaid,
         remainingBalance,
-        paymentProgress // Added payment progress percentage
+        paymentProgress, // Added payment progress percentage
+        totalExpense,
+        totalBudgetUsed
     };
 
     // Build Construction Stages Timeline
@@ -630,7 +665,12 @@ export const getProjectsByCustomerId = async (customerId: string) => {
             },
             expenses: {
                 select: {
-                    amount: true
+                    expenseId: true,
+                    amount: true,
+                    category: true,
+                    date: true,
+                    description: true,
+                    status: true
                 }
             }
         }
@@ -649,6 +689,7 @@ export const getProjectsByCustomerId = async (customerId: string) => {
             totalBudget: project.totalBudget,
             totalExpense: totalExpense,
             totalBudgetUsed: totalBudgetUsed,
+            expenses: project.expenses, // Added expenses array
             supervisorId: project.supervisorId,
             supervisor: project.supervisor ? {
                 supervisorId: project.supervisor.supervisorId,
