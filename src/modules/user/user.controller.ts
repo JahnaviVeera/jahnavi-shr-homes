@@ -109,6 +109,12 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
  *   get:
  *     summary: Get all users
  *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by user name, email, or company name
  *     responses:
  *       200:
  *         description: Users fetched successfully

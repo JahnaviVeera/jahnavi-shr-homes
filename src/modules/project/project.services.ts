@@ -609,14 +609,15 @@ export const getProjectByProjectId = async (projectId: string) => {
         return `${day}-${month}-${year}`;
     };
 
-    // Destructure to exclude dailyUpdates and payments from the response (payments are now summarized)
-    const { dailyUpdates: _, payments: __, ...rest } = project as any;
+    // Destructure to exclude dailyUpdates, payments, and expenses from the response
+    const { dailyUpdates: _, payments: __, expenses: ___, ...rest } = project as any;
 
     return {
         ...rest,
         progress, // Override stored progress
         budgetSummary, // Add budget summary
         constructionStages, // Add timeline data
+        expense: expenses, // Include expense details in 'expense' object
         startDate: formatToDDMMYYYY(project.startDate),
         expectedCompletion: formatToDDMMYYYY(project.expectedCompletion)
     };
