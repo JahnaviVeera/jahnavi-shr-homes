@@ -240,6 +240,7 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
     fullName?: string;
     email?: string;
     phoneNumber?: string;
+    phone?: string;  // Allow 'phone' as alias for phoneNumber
     password?: string | null;
     status?: string;
     projectIds?: string[] | null;
@@ -288,31 +289,48 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         userDataToUpdate.userName = updateData.fullName;
         hasUserUpdates = true;
     }
+
     if (updateData.email !== undefined) {
         dataToUpdate.email = updateData.email;
         userDataToUpdate.email = updateData.email;
         hasUserUpdates = true;
     }
-    if (updateData.phoneNumber !== undefined) {
-        dataToUpdate.phoneNumber = updateData.phoneNumber;
-        userDataToUpdate.contact = updateData.phoneNumber;
+
+    // Handle Phone Number (support 'phone' or 'phoneNumber')
+    const newPhone = updateData.phoneNumber || updateData.phone;
+    if (newPhone !== undefined) {
+        dataToUpdate.phoneNumber = newPhone;
+        userDataToUpdate.contact = newPhone;
         hasUserUpdates = true;
     }
+
+    // Handle Status
     if (updateData.status !== undefined) {
-        dataToUpdate.status = updateData.status as SupervisorStatus;
-        userDataToUpdate.status = updateData.status === 'Active' ? 'Active' : 'Inactive';
-        hasUserUpdates = true;
+        // Validate status if needed, or assume it matches Enum
+        // We'll trust the input or map it if it matches known values ignoring case
+        const statusValues = Object.values(SupervisorStatus);
+        const matchedStatus = statusValues.find(s => s.toLowerCase() === updateData.status?.toLowerCase());
+
+        if (matchedStatus) {
+            dataToUpdate.status = matchedStatus;
+            userDataToUpdate.status = matchedStatus === 'Active' ? 'Active' : 'Inactive';
+            hasUserUpdates = true;
+        } else {
+            // If invalid status passed, maybe ignore or throw? 
+            // Let's keep existing behavior: cast it (but safer to just use what we have if it matches)
+            dataToUpdate.status = updateData.status as SupervisorStatus;
+            userDataToUpdate.status = updateData.status === 'Active' ? 'Active' : 'Inactive';
+            hasUserUpdates = true;
+        }
     }
 
     // Handle password update (hash if provided)
     if (updateData.password !== undefined) {
         if (updateData.password === null || updateData.password.trim() === "") {
+            // If explicit null/empty passed, we might want to clear it? 
+            // Or just ignore. The previous logic set it to null.
             dataToUpdate.password = null;
-            // We usually don't set user password to null if supervisor password is removed, 
-            // but assuming supervisor login relies on User table, we should probably update it if a valid password is sent.
-            // If the intention is to remove access, status should be used. 
-            // For now, if empty string/null is passed, we might skip updating User password or set it to null if that's the intent.
-            // Let's assume we only update User password if a NEW valid password is provided.
+            // userDataToUpdate.password = null; // Optional: clear user password too? 
         } else {
             const hashedPassword = await bcrypt.hash(updateData.password, 10);
             dataToUpdate.password = hashedPassword;
