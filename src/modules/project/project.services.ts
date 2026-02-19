@@ -308,11 +308,13 @@ export const getAllTheProjects = async (search?: string, page?: number, limit?: 
 };
 
 // Update project
+// Update project
 export const updateProject = async (projectId: string, updateData: {
     projectName?: string,
     projectType?: string,
     location?: string,
     initialStatus?: string,
+    status?: string, // Added status field alias
     startDate?: string | Date,
     expectedCompletion?: string | Date,
     totalBudget?: number,
@@ -362,6 +364,7 @@ export const updateProject = async (projectId: string, updateData: {
 
     if (updateData.location !== undefined) dataToUpdate.location = updateData.location;
 
+    // Handle initialStatus (legacy)
     if (updateData.initialStatus !== undefined) {
         // Validate initialStatus
         const validStatuses = Object.values(ProjectStatus);
@@ -371,12 +374,22 @@ export const updateProject = async (projectId: string, updateData: {
         dataToUpdate.initialStatus = updateData.initialStatus as ProjectStatus;
     }
 
+    // Handle status (alias for initialStatus)
+    if (updateData.status !== undefined) {
+        // Validate status
+        const validStatuses = Object.values(ProjectStatus);
+        if (!validStatuses.includes(updateData.status as ProjectStatus)) {
+            throw new Error(`Invalid status: "${updateData.status}". Valid values are: ${validStatuses.join(', ')}`);
+        }
+        dataToUpdate.initialStatus = updateData.status as ProjectStatus;
+    }
+
     if (updateData.startDate !== undefined) dataToUpdate.startDate = formatDateString(updateData.startDate);
     if (updateData.expectedCompletion !== undefined) dataToUpdate.expectedCompletion = formatDateString(updateData.expectedCompletion);
     if (updateData.totalBudget !== undefined) dataToUpdate.totalBudget = updateData.totalBudget;
     if (updateData.materialName !== undefined) dataToUpdate.materialName = updateData.materialName;
     if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
-    if (updateData.quantity !== undefined) dataToUpdate.quantity = updateData.quantity;
+    // Removed duplicate quantity check
     if (updateData.notes !== undefined) dataToUpdate.notes = updateData.notes;
 
     // New fields

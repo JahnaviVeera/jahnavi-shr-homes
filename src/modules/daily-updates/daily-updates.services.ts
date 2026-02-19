@@ -181,13 +181,35 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
 
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
+        include: {
+            project: {
+                select: {
+                    projectName: true,
+                    location: true
+                }
+            }
+        }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    return dailyUpdate;
+    // Parse rawMaterials
+    let parsedRawMaterials = dailyUpdate.rawMaterials;
+    if (typeof dailyUpdate.rawMaterials === 'string') {
+        try {
+            parsedRawMaterials = JSON.parse(dailyUpdate.rawMaterials);
+        } catch (e) {
+            parsedRawMaterials = [];
+        }
+    }
+    if (!parsedRawMaterials) parsedRawMaterials = [];
+
+    return {
+        ...dailyUpdate,
+        rawMaterials: parsedRawMaterials
+    };
 };
 
 /**
