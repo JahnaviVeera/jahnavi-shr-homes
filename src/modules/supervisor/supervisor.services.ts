@@ -423,7 +423,7 @@ export const deleteSupervisor = async (supervisorId: string) => {
                     data: {
                         status: 'Inactive',
                         email: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.email}`,
-                        phoneNumber: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.phoneNumber}`
+                        contact: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.phoneNumber}`
                     }
                 });
             } catch (updateError) {

@@ -11,7 +11,7 @@ export const getCustomerLeadsStats = async () => {
 
     // Closed Customers: Unique customers with at least one complete or Completed project
     const closedCustomersCount = await prisma.project.findMany({
-        where: { initialStatus: { in: ['complete', 'Completed'] } },
+        where: { initialStatus: { in: ['Completed'] } },
         distinct: ['customerId'],
         select: { customerId: true }
     }).then(res => res.length);
@@ -52,7 +52,7 @@ export const getNewLeadsList = async () => {
 export const getClosedCustomersList = async () => {
     const projects = await prisma.project.findMany({
         where: {
-            initialStatus: { in: ['complete', 'Completed'] }
+            initialStatus: { in: ['Completed'] }
         },
         include: {
             customer: true
