@@ -400,38 +400,40 @@ export const deleteSupervisor = async (supervisorId: string) => {
     // BUT we saw in schema that explicit relations might be missing FK constraints or relying on Prisma defaults.
     // Let's attempt to delete Supervisor.
 
-    // Using transaction to ensure both are deleted or neither
-    const transaction = await prisma.$transaction(async (prisma) => {
-        // 1. Delete Supervisor
-        const deletedSup = await prisma.supervisor.delete({
-            where: { supervisorId }
-        });
-
-        // 2. Delete associated User if it exists
-        if (supervisor.userId) {
-            // We need to be careful about referential integrity on the User table too (e.g. sentMessages, etc.)
-            // If the user has other relations that prevent deletion, this might fail.
-            // For now, we will try to delete. If it fails due to FKs (like messages), maybe we should just Soft Delete (set status Inactive)?
-            // The prompt asks for "Delete API". Typically implies hard delete.
-            // Let's try hard delete.
-            try {
-                await prisma.user.delete({
-                    where: { userId: supervisor.userId }
-                });
-            } catch (error) {
-                console.warn(`Could not delete associated user ${supervisor.userId} for supervisor ${supervisorId}:`, error);
-                // Optionally: decide if we should fail the whole transaction or allow orphaned user.
-                // For now, let's allow it but maybe deactivate?
-                await prisma.user.update({
-                    where: { userId: supervisor.userId },
-                    data: { status: 'Inactive', email: `deleted_${supervisor.userId}_${supervisor.email}` } // Rename email to free it up
-                });
-            }
-        }
-        return deletedSup;
+    // 1. Delete Supervisor
+    // We are removing the transaction wrapper because if user.delete fails, 
+    // it aborts the transaction in Postgres, preventing the fallback user.update from running.
+    // Since we explicitly want to fall back to soft delete if hard delete fails, 
+    // we run these as separate operations.
+    const deletedSup = await prisma.supervisor.delete({
+        where: { supervisorId }
     });
 
-    return transaction;
+    // 2. Delete associated User if it exists
+    if (supervisor.userId) {
+        try {
+            await prisma.user.delete({
+                where: { userId: supervisor.userId }
+            });
+        } catch (error) {
+            console.warn(`Could not delete associated user ${supervisor.userId} for supervisor ${supervisorId}. Falling back to soft delete. Error:`, error);
+            try {
+                await prisma.user.update({
+                    where: { userId: supervisor.userId },
+                    data: {
+                        status: 'Inactive',
+                        email: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.email}`,
+                        phoneNumber: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.phoneNumber}`
+                    }
+                });
+            } catch (updateError) {
+                console.error(`Failed to soft delete user ${supervisor.userId}:`, updateError);
+                // We don't throw here to allow the supervisor deletion to be reported as success
+            }
+        }
+    }
+
+    return deletedSup;
 };
 
 // Assign project to supervisor

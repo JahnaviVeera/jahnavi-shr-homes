@@ -247,7 +247,53 @@ exports.getAllProjects = async (req: Request, res: Response) => {
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateProjectRequest'
+ *             type: object
+ *             properties:
+ *               projectName:
+ *                 type: string
+ *               projectType:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *                 enum: ["Planning", "Inprogress", "Completed", "complete"]
+ *                 description: Update project status (aliases to initialStatus)
+ *               initialStatus:
+ *                 type: string
+ *                 description: Original field for status
+ *               startDate:
+ *                 type: string
+ *                 format: date
+ *               expectedCompletion:
+ *                 type: string
+ *                 format: date
+ *               totalBudget:
+ *                 type: number
+ *               materialName:
+ *                 type: string
+ *               quantity:
+ *                 type: number
+ *               customerId:
+ *                 type: string
+ *                 format: uuid
+ *               supervisorId:
+ *                 type: string
+ *                 format: uuid
+ *               projectManager:
+ *                  type: string
+ *               area:
+ *                  type: string
+ *               numberOfFloors:
+ *                  type: number
+ *               priority:
+ *                  type: string
+ *               currency:
+ *                  type: string
+ *               description:
+ *                  type: string
+ *               progress:
+ *                  type: number
  *     responses:
  *       200:
  *         description: Project updated successfully

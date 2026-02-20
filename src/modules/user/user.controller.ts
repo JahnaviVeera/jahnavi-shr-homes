@@ -109,6 +109,12 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
  *   get:
  *     summary: Get all users
  *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by user name, email, or company name
  *     responses:
  *       200:
  *         description: Users fetched successfully
@@ -133,7 +139,8 @@ exports.getuserById = async (req: Request, res: Response, next: NextFunction) =>
 //GETALL
 exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const users = await UserServices.getAllUsers();
+        const search = req.query.search as string;
+        const users = await UserServices.getAllUsers(search);
         return res.status(200).json({
             success: true,
             message: "Users fetched successfully",
@@ -176,19 +183,11 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 type: string
  *                 enum: ["admin", "customer", "supervisor"]
  *                 example: "customer"
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "john.doe@example.com"
  *               password:
  *                 type: string
  *                 maxLength: 255
  *                 example: "NewPassword123!"
  *                 description: Password (will be hashed automatically)
- *               contact:
- *                 type: string
- *                 maxLength: 15
- *                 example: "9876543210"
  *               status:
  *                 type: string
  *                 enum: ["Active", "Inactive"]
@@ -256,7 +255,10 @@ exports.updateUser = async (req: Request, res: Response) => {
     try {
         const userId = req.params.userId;
 
-        const updatedUserData = await UserServices.updateUser(userId, req.body);
+        // Prevent updating email and contact/phone number via this endpoint
+        const { email, contact, phoneNumber, ...allowedUpdates } = req.body;
+
+        const updatedUserData = await UserServices.updateUser(userId, allowedUpdates);
 
         return res.status(200).json({
             success: true,
@@ -1237,7 +1239,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFu
  * @swagger
  * /api/user/leads/new:
  *   get:
- *     summary: Get list of new leads (Users with Inprogress or Planning projects)
+ *     summary: Get list of new leads (Users with Inprogress projects)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []

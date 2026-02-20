@@ -30,11 +30,9 @@ enum ProjectType {
 }
 
 enum ProjectStatus {
-  Planning
   Inprogress
   OnHold
   Completed
-  complete
 
   @@map("projects_initialstatus_enum")
 }
@@ -362,7 +360,6 @@ model Expense {
 
   @@map("expenses")
 }
-
 
 enum MaterialUnit {
   units

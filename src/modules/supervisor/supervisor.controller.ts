@@ -386,6 +386,14 @@ exports.updateSupervisor = async (req: Request, res: Response) => {
 exports.deleteSupervisor = async (req: Request, res: Response) => {
     try {
         const { supervisorId } = req.params;
+
+        if (!supervisorId || supervisorId === 'undefined' || supervisorId === 'null') {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Supervisor ID provided. Please provide a valid UUID."
+            });
+        }
+
         const deletedSupervisor = await SupervisorServices.deleteSupervisor(supervisorId);
 
         return res.status(200).json({

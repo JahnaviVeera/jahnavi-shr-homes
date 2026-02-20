@@ -155,8 +155,8 @@ const options = {
             },
             initialStatus: {
               type: "string",
-              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
-              example: "Planning",
+              enum: ["Inprogress", "OnHold", "Completed"],
+              example: "Inprogress",
             },
             startDate: {
               type: "string",
@@ -376,8 +376,8 @@ const options = {
             },
             initialStatus: {
               type: "string",
-              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
-              example: "Planning",
+              enum: ["Inprogress", "OnHold", "Completed"],
+              example: "Inprogress",
             },
             startDate: {
               type: "string",
@@ -444,7 +444,7 @@ const options = {
             },
             initialStatus: {
               type: "string",
-              enum: ["Planning", "Inprogress", "OnHold", "Completed"],
+              enum: ["Inprogress", "OnHold", "Completed"],
               example: "Inprogress",
             },
             startDate: {
