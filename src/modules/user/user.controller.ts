@@ -1239,7 +1239,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFu
  * @swagger
  * /api/user/leads/new:
  *   get:
- *     summary: Get list of new leads (Users with Inprogress or Planning projects)
+ *     summary: Get list of new leads (Users with Inprogress projects)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []

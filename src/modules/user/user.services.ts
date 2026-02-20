@@ -308,19 +308,21 @@ export const changePassword = async (userId: string, currentPassword: string, ne
 
 // Get Customer Leads Stats
 export const getCustomerLeadsStats = async () => {
-    // New Leads: Unique customers with at least one Inprogress or Planning project
-    const newLeadsCount = await prisma.project.findMany({
-        where: { initialStatus: { in: ['Inprogress', 'Planning'] } },
-        distinct: ['customerId'],
-        select: { customerId: true }
-    }).then(res => res.length);
+    // New Leads: Users with Active status
+    const newLeadsCount = await prisma.user.count({
+        where: {
+            role: UserRole.customer,
+            status: UserStatus.Active
+        }
+    });
 
-    // Closed Customers: Unique customers with at least one complete or Completed project
-    const closedCustomersCount = await prisma.project.findMany({
-        where: { initialStatus: { in: ['complete', 'Completed'] } },
-        distinct: ['customerId'],
-        select: { customerId: true }
-    }).then(res => res.length);
+    // Closed Customers: Users with Inactive status
+    const closedCustomersCount = await prisma.user.count({
+        where: {
+            role: UserRole.customer,
+            status: UserStatus.Inactive
+        }
+    });
 
     return {
         newLeads: newLeadsCount,
@@ -329,51 +331,81 @@ export const getCustomerLeadsStats = async () => {
     };
 };
 
-// Get New Leads List (Users with active projects - not completed)
+// Get New Leads List (Users with Active status)
 export const getNewLeadsList = async () => {
-    const projects = await prisma.project.findMany({
+    // 1. Get all Active customers
+    const activeCustomers = await prisma.user.findMany({
         where: {
-            initialStatus: { notIn: ['Completed', 'complete'] }
+            role: UserRole.customer,
+            status: UserStatus.Active
         },
         include: {
-            customer: true
+            // Include their latest project if needed to show project info
+            projects: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+            }
         },
         orderBy: {
-            startDate: 'desc'
+            createdAt: 'desc'
         }
     });
 
-    // Remove password from customer details
-    return projects.map(project => {
-        const { customer, ...projectDetails } = project;
-        const { password, ...userDetails } = customer;
+    // 2. Format the response to structure it similarly to before (flat object with user + project info)
+    // Or users might just want the user list. The original returned "projects" with user info.
+    // To minimize breakage, let's returning the user info, and if they have a project, include its details.
+
+    // Original return shape: Array of Project & { customer: User }
+    // But now checking USER status, a user might not have a project yet.
+    // The request implies "leads" are users.
+
+    // Let's return the user + their latest project details flattened, or just the user object with a 'project' field.
+    // Based on the user request, he seems to want to see the users in these lists.
+
+    return activeCustomers.map(user => {
+        const { password, ...userDetails } = user;
+        const latestProject = user.projects[0] || {};
+
+        // Return a structure that resembles the old one for compatibility if the frontend expects project fields at root level?
+        // The original response was PROJECT-centric. Currently it's USER-centric.
+        // Let's return User details primarily, merging latest project info if available.
+
         return {
-            ...projectDetails,
-            customer: userDetails
+            ...latestProject, // Spread project fields first (default empty if none)
+            ...userDetails,   // Spread user fields (overwriting any conflicts, user ID is key)
+            customer: userDetails // Keep nested customer object for compatibility with Project-based views
         };
+        // Note: Ideally, specific response DTOs should be defined. 
+        // With spread `...latestProject`, we get projectId, projectName etc at root.
+        // With spread `...userDetails`, we get userId, userName at root.
     });
 };
 
-// Get Closed Customers List (Users with complete/Completed projects)
+// Get Closed Customers List (Users with Inactive status)
 export const getClosedCustomersList = async () => {
-    const projects = await prisma.project.findMany({
+    const inactiveCustomers = await prisma.user.findMany({
         where: {
-            initialStatus: { in: ['complete', 'Completed'] }
+            role: UserRole.customer,
+            status: UserStatus.Inactive
         },
         include: {
-            customer: true
+            projects: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+            }
         },
         orderBy: {
-            startDate: 'desc'
+            createdAt: 'desc'
         }
     });
 
-    // Remove password from customer details
-    return projects.map(project => {
-        const { customer, ...projectDetails } = project;
-        const { password, ...userDetails } = customer;
+    return inactiveCustomers.map(user => {
+        const { password, ...userDetails } = user;
+        const latestProject = user.projects[0] || {};
+
         return {
-            ...projectDetails,
+            ...latestProject,
+            ...userDetails,
             customer: userDetails
         };
     });
@@ -555,7 +587,7 @@ export const getUsersWithoutSupervisor = async () => {
     const projects = await prisma.project.findMany({
         where: {
             supervisorId: null,
-            initialStatus: { in: ['Planning', 'Inprogress'] }
+            initialStatus: { in: ['Inprogress'] }
         },
         select: { customerId: true },
         distinct: ['customerId']
@@ -587,7 +619,7 @@ export const assignSupervisor = async (userId: string, supervisorId: string) => 
     const updateResult = await prisma.project.updateMany({
         where: {
             customerId: userId,
-            initialStatus: { in: ['Planning', 'Inprogress'] }
+            initialStatus: { in: ['Inprogress'] }
         },
         data: {
             supervisorId: supervisorId
@@ -601,7 +633,7 @@ export const removeSupervisor = async (userId: string) => {
     const updateResult = await prisma.project.updateMany({
         where: {
             customerId: userId,
-            initialStatus: { in: ['Planning', 'Inprogress'] }
+            initialStatus: { in: ['Inprogress'] }
         },
         data: {
             supervisorId: null
