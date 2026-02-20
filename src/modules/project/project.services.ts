@@ -820,7 +820,7 @@ export const getRecentActiveProjects = async () => {
     const projects = await prisma.project.findMany({
         where: {
             initialStatus: {
-                in: [ProjectStatus.Planning, ProjectStatus.Inprogress]
+                in: [ProjectStatus.Inprogress]
             }
         },
         orderBy: { createdAt: 'desc' },

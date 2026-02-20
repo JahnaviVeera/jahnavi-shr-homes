@@ -41,7 +41,7 @@ const ProjectServices = require("./project.services");
  *             "projectName": "Sunrise Villa",
  *             "projectType": "villa",
  *             "location": "City, State",
- *             "initialStatus": "Planning",
+ *             "initialStatus": "Inprogress",
  *             "startDate": "2024-01-01",
  *             "expectedCompletion": "2024-12-31",
  *             "totalBudget": 5000000,
@@ -257,7 +257,7 @@ exports.getAllProjects = async (req: Request, res: Response) => {
  *                 type: string
  *               status:
  *                 type: string
- *                 enum: ["Planning", "Inprogress", "Completed", "complete"]
+ *                 enum: ["Inprogress", "OnHold", "Completed"]
  *                 description: Update project status (aliases to initialStatus)
  *               initialStatus:
  *                 type: string
