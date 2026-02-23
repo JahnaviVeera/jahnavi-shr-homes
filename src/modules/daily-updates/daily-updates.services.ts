@@ -197,14 +197,21 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
 
     // Parse rawMaterials
     let parsedRawMaterials = dailyUpdate.rawMaterials;
-    if (typeof dailyUpdate.rawMaterials === 'string') {
-        try {
-            parsedRawMaterials = JSON.parse(dailyUpdate.rawMaterials);
-        } catch (e) {
-            parsedRawMaterials = [];
+    for (let i = 0; i < 3; i++) {
+        if (typeof parsedRawMaterials === 'string') {
+            try {
+                parsedRawMaterials = JSON.parse(parsedRawMaterials);
+            } catch (e) {
+                break;
+            }
+        } else {
+            break;
         }
     }
-    if (!parsedRawMaterials) parsedRawMaterials = [];
+
+    if (!parsedRawMaterials || !Array.isArray(parsedRawMaterials)) {
+        parsedRawMaterials = [];
+    }
 
     return {
         ...dailyUpdate,
@@ -533,14 +540,21 @@ export const getDailyUpdatesForUser = async (userId: string) => {
 
         // Parse rawMaterials
         let parsedRawMaterials = update.rawMaterials;
-        if (typeof update.rawMaterials === 'string') {
-            try {
-                parsedRawMaterials = JSON.parse(update.rawMaterials);
-            } catch (e) {
-                parsedRawMaterials = [];
+        for (let i = 0; i < 3; i++) {
+            if (typeof parsedRawMaterials === 'string') {
+                try {
+                    parsedRawMaterials = JSON.parse(parsedRawMaterials);
+                } catch (e) {
+                    break;
+                }
+            } else {
+                break;
             }
         }
-        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        if (!parsedRawMaterials || !Array.isArray(parsedRawMaterials)) {
+            parsedRawMaterials = [];
+        }
 
         if (!update.project) return { ...update, rawMaterials: parsedRawMaterials };
 
@@ -607,15 +621,24 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
     // Parse rawMaterials
     const parsedUpdates = dailyUpdates.map(update => {
         let parsedRawMaterials = update.rawMaterials;
-        if (typeof update.rawMaterials === 'string') {
-            try {
-                parsedRawMaterials = JSON.parse(update.rawMaterials);
-            } catch (e) {
-                console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
-                parsedRawMaterials = [];
+
+        // Loop to safely parse double or triple stringified JSON, if any
+        for (let i = 0; i < 3; i++) {
+            if (typeof parsedRawMaterials === 'string') {
+                try {
+                    parsedRawMaterials = JSON.parse(parsedRawMaterials);
+                } catch (e) {
+                    console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
+                    break;
+                }
+            } else {
+                break;
             }
         }
-        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        if (!parsedRawMaterials || !Array.isArray(parsedRawMaterials)) {
+            parsedRawMaterials = [];
+        }
 
         return {
             ...update,
@@ -661,15 +684,23 @@ export const getDailyUpdatesByStatus = async (status: string, supervisorId?: str
     // Parse rawMaterials
     const parsedUpdates = updates.map(update => {
         let parsedRawMaterials = update.rawMaterials;
-        if (typeof update.rawMaterials === 'string') {
-            try {
-                parsedRawMaterials = JSON.parse(update.rawMaterials);
-            } catch (e) {
-                console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
-                parsedRawMaterials = [];
+
+        for (let i = 0; i < 3; i++) {
+            if (typeof parsedRawMaterials === 'string') {
+                try {
+                    parsedRawMaterials = JSON.parse(parsedRawMaterials);
+                } catch (e) {
+                    console.error(`Failed to parse rawMaterials for update ${update.dailyUpdateId}:`, e);
+                    break;
+                }
+            } else {
+                break;
             }
         }
-        if (!parsedRawMaterials) parsedRawMaterials = [];
+
+        if (!parsedRawMaterials || !Array.isArray(parsedRawMaterials)) {
+            parsedRawMaterials = [];
+        }
 
         return {
             ...update,
