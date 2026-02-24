@@ -1,6 +1,13 @@
 import type { Request, Response } from "express";
 import * as DailyUpdatesServices from "./daily-updates.services";
 import * as supervisorService from "../supervisor/supervisor.services";
+import prisma from "../../config/prisma.client";
+import { sendEmail } from '../../email/emailService';
+import { adminDailyUpdatePostedEmail } from '../../email/templates/admin/dailyUpdatePosted';
+import { adminDailyUpdateApprovedEmail } from '../../email/templates/admin/dailyUpdateApproved';
+import { adminDailyUpdateRejectedEmail } from '../../email/templates/admin/dailyUpdateRejected';
+import { supervisorDailyUpdateApprovedEmail } from '../../email/templates/supervisor/dailyUpdateApproved';
+import { supervisorDailyUpdateRejectedEmail } from '../../email/templates/supervisor/dailyUpdateRejected';
 
 interface RequestWithUser extends Request {
     user?: {
@@ -116,10 +123,136 @@ export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
             supervisorId
         );
 
+        // Email Admin: supervisor posted a daily update
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+            if (admin?.email && dailyUpdateData.projectId) {
+                const project = await prisma.project.findUnique({
+                    where: { projectId: dailyUpdateData.projectId },
+                    include: { supervisor: true }
+                });
+                if (project) {
+                    sendEmail({
+                        to: admin.email,
+                        subject: `Daily Update Posted – ${project.projectName}`,
+                        html: adminDailyUpdatePostedEmail({
+                            supervisorName: project.supervisor?.fullName || 'Supervisor',
+                            projectName: project.projectName,
+                            constructionStage: String(dailyUpdateData.constructionStage || ''),
+                            frontendUrl
+                        })
+                    });
+                }
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send daily update posted email:', emailErr);
+        }
+
         return res.status(201).json({
             success: true,
             message: "Daily update created successfully",
             data: dailyUpdateData,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/admin:
+ *   post:
+ *     summary: Create a new admin daily update (Supervisor only)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: ["projectId"]
+ *             properties:
+ *               projectId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               quantityConsumption:
+ *                 type: string
+ *                 format: json
+ *                 description: array of consumption objects
+ *                 example: '[{"materialName":"Cement","totalQuantity":"100 bags","consumed":"40 bags","date":"24-02-2026","notes":""}]'
+ *               labourWorkers:
+ *                 type: string
+ *                 format: json
+ *                 description: array of worker objects
+ *                 example: '[{"noOfLabours":5,"notes":"Masons working on brick laying"}]'
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Admin daily update created successfully
+ *       400:
+ *         description: Bad request - Validation error
+ */
+export const createAdminDailyUpdate = async (req: MulterRequest, res: Response) => {
+    try {
+        let image: any = undefined;
+
+        if (req.files && !Array.isArray(req.files)) {
+            image = req.files['image']?.[0];
+        } else if (req.file) {
+            image = req.file;
+        }
+
+        let quantityConsumption = null;
+        if (req.body.quantityConsumption) {
+            try {
+                quantityConsumption = typeof req.body.quantityConsumption === 'string'
+                    ? JSON.parse(req.body.quantityConsumption)
+                    : req.body.quantityConsumption;
+            } catch (error) {
+                return res.status(400).json({ success: false, message: "Invalid quantityConsumption JSON format" });
+            }
+        }
+
+        let labourWorkers = null;
+        if (req.body.labourWorkers) {
+            try {
+                labourWorkers = typeof req.body.labourWorkers === 'string'
+                    ? JSON.parse(req.body.labourWorkers)
+                    : req.body.labourWorkers;
+            } catch (error) {
+                return res.status(400).json({ success: false, message: "Invalid labourWorkers JSON format" });
+            }
+        }
+
+        let supervisorId: string | undefined = undefined;
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const adminUpdateData = await DailyUpdatesServices.createAdminDailyUpdate(
+            {
+                projectId: req.body.projectId,
+                quantityConsumption,
+                labourWorkers
+            },
+            image,
+            supervisorId
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Admin daily update created successfully",
+            data: adminUpdateData,
         });
     } catch (error) {
         return res.status(400).json({
@@ -765,6 +898,55 @@ export const approveDailyUpdate = async (req: RequestWithUser, res: Response) =>
 
         const approvedUpdate = await DailyUpdatesServices.approveDailyUpdate(dailyUpdateId, userId);
 
+        // Email notifications after approve
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const customer = await prisma.user.findUnique({ where: { userId } });
+            const customerName = customer?.userName || 'Customer';
+
+            // Fetch daily update with project + supervisor info
+            const updateWithProject = await prisma.dailyUpdate.findUnique({
+                where: { dailyUpdateId },
+                include: {
+                    project: {
+                        include: {
+                            supervisor: true
+                        }
+                    }
+                }
+            });
+            const projectName = updateWithProject?.project?.projectName || 'Your Project';
+            const constructionStage = String(updateWithProject?.constructionStage || '');
+
+            // Notify Admin
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+            if (admin?.email) {
+                sendEmail({
+                    to: admin.email,
+                    subject: `Daily Update Approved by Customer – ${projectName}`,
+                    html: adminDailyUpdateApprovedEmail({ customerName, projectName, frontendUrl })
+                });
+            }
+
+            // Notify Supervisor
+            const supervisor = updateWithProject?.project?.supervisor;
+            if (supervisor?.email) {
+                const supervisorUserRecord = await prisma.user.findUnique({ where: { userId: supervisor.userId } });
+                sendEmail({
+                    to: supervisor.email,
+                    subject: `Your Daily Update was Approved – ${projectName}`,
+                    html: supervisorDailyUpdateApprovedEmail({
+                        supervisorName: supervisor.fullName || 'Supervisor',
+                        projectName,
+                        customerName,
+                        frontendUrl
+                    })
+                });
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send daily update approved emails:', emailErr);
+        }
+
         return res.status(200).json({
             success: true,
             message: "Daily update approved successfully",
@@ -807,6 +989,52 @@ export const rejectDailyUpdate = async (req: RequestWithUser, res: Response) => 
         }
 
         const rejectedUpdate = await DailyUpdatesServices.rejectDailyUpdate(dailyUpdateId, userId);
+
+        // Email notifications after reject
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const customer = await prisma.user.findUnique({ where: { userId } });
+            const customerName = customer?.userName || 'Customer';
+            const reason = req.body?.reason;
+
+            const updateWithProject = await prisma.dailyUpdate.findUnique({
+                where: { dailyUpdateId },
+                include: {
+                    project: {
+                        include: { supervisor: true }
+                    }
+                }
+            });
+            const projectName = updateWithProject?.project?.projectName || 'Your Project';
+
+            // Notify Admin
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+            if (admin?.email) {
+                sendEmail({
+                    to: admin.email,
+                    subject: `Daily Update Rejected by Customer – ${projectName}`,
+                    html: adminDailyUpdateRejectedEmail({ customerName, projectName, reason, frontendUrl })
+                });
+            }
+
+            // Notify Supervisor
+            const supervisor = updateWithProject?.project?.supervisor;
+            if (supervisor?.email) {
+                sendEmail({
+                    to: supervisor.email,
+                    subject: `Your Daily Update was Rejected – ${projectName}`,
+                    html: supervisorDailyUpdateRejectedEmail({
+                        supervisorName: supervisor.fullName || 'Supervisor',
+                        projectName,
+                        customerName,
+                        reason,
+                        frontendUrl
+                    })
+                });
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send daily update rejected emails:', emailErr);
+        }
 
         return res.status(200).json({
             success: true,
@@ -978,3 +1206,82 @@ export const getSupervisorStats = async (req: RequestWithUser, res: Response) =>
     }
 };
 
+/**
+ * @swagger
+ * /api/daily-updates/admin/all:
+ *   get:
+ *     summary: Get all admin daily updates (Admin and Supervisor only)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         required: false
+ *         description: >
+ *           Optional. Filter updates by a specific project.
+ *           Admin can pass any projectId. Supervisor can also pass a projectId
+ *           but only sees it if they are assigned to that project.
+ *           If omitted, supervisors see all updates for their assigned projects
+ *           and admins see all admin updates.
+ *     responses:
+ *       200:
+ *         description: Admin daily updates fetched successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin or Supervisor access required
+ */
+export const getAllAdminDailyUpdates = async (req: RequestWithUser, res: Response) => {
+    try {
+        const role = req.user?.role;
+        const projectId = req.query.projectId as string | undefined;
+
+        let supervisorId: string | undefined = undefined;
+
+        if (role === 'supervisor') {
+            // Resolve the supervisor record from the logged-in user
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user!.userId);
+            supervisorId = supervisor.supervisorId;
+
+            // If a projectId is requested, verify this supervisor is assigned to it
+            if (projectId && projectId.trim() !== "") {
+                const projectCheck = await prisma.project.findFirst({
+                    where: {
+                        projectId: projectId,
+                        supervisorId: supervisorId
+                    }
+                });
+                if (!projectCheck) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Forbidden: You are not assigned to this project"
+                    });
+                }
+                // Use projectId filter (supervisor is confirmed assigned)
+                supervisorId = undefined;
+            }
+        }
+
+        const updates = await DailyUpdatesServices.getAllAdminDailyUpdates(projectId, supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin daily updates fetched successfully",
+            count: updates.length,
+            filters: {
+                projectId: projectId || null,
+                role: role
+            },
+            data: updates
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};

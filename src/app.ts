@@ -15,6 +15,7 @@ import expenseRoutes from "./modules/expense/expense.routes";
 import dailyUpdatesRoutes from "./modules/daily-updates/daily-updates.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import notificationsRoutes from "./modules/notifications/notifications.routes";
+import emailLogsRoutes from "./email/emailLogs.routes";
 
 /* -------------------- U can have Routes N Middlewares imports-------------------- */
 
@@ -82,6 +83,7 @@ app.use("/api/expense", expenseRoutes)
 app.use("/api/daily-updates", dailyUpdatesRoutes)
 app.use("/api/messages", messagesRoutes)
 app.use("/api/notifications", notificationsRoutes)
+app.use("/api/email-logs", emailLogsRoutes)
 
 // Global Error Handler for JSON parse errors and other unhandled errors
 app.use((err: any, req: Request, res: Response, next: any) => {

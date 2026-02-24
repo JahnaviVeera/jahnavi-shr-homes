@@ -1,5 +1,8 @@
 ﻿import type { Request, Response, NextFunction } from "express";
 const UserServices = require("./user.services");
+import { sendEmail } from '../../email/emailService';
+import { passwordChangedEmail } from '../../email/templates/shared/passwordChanged';
+import prisma from '../../config/prisma.client';
 
 /**
  * @swagger
@@ -37,10 +40,34 @@ const UserServices = require("./user.services");
  *         description: Unauthorized - Admin authentication required
  *       403:
  *         description: Forbidden - Admin privileges required
+ *     # Example Payload:
+ *     # {
+ *     #   "userName": "Ramesh Kumar",
+ *     #   "phone": "9876543210", 
+ *     #   "email": "ramesh@email.com",
+ *     #   "location": "Plot 12, Banjara Hills, Hyderabad",
+ *     #   "requirements": "3BHK villa, 2400 sq ft, ground floor only",
+ *     #   "description": "Additional project details, budget range...",
+ *     #   "notes": "Internal notes..."
+ *     # }
  */
 //POST
 exports.createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        if (!req.body || Object.keys(req.body).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Request body is empty or improperly formatted. Ensure Content-Type is application/json."
+            });
+        }
+
+        if (!req.body.email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required"
+            });
+        }
+
         const userData = await UserServices.createUser(req.body);
 
         return res.status(201).json({
@@ -206,6 +233,19 @@ exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) =>
  *                 maxLength: 255
  *                 example: "ABC Construction Ltd"
  *                 description: Company name (optional)
+ *               location:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "Plot 12, Banjara Hills, Hyderabad"
+ *                 description: Location of site (optional)
+ *               requirements:
+ *                 type: string
+ *                 example: "3BHK villa, 2400 sq ft"
+ *                 description: Project requirements (optional)
+ *               description:
+ *                 type: string
+ *                 example: "Additional project details"
+ *                 description: Additional project details (optional)
 
  *
  *               timezone:
@@ -1171,6 +1211,7 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
         }
 
         // 1. Handle Password Change if requested
+        let passwordWasChanged = false;
         if (newPassword && newPassword.trim() !== "") {
             if (newPassword !== confirmNewPassword) {
                 return res.status(400).json({ success: false, message: "New passwords do not match" });
@@ -1180,6 +1221,7 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
             }
             // This service method checks current password and updates to new
             await UserServices.changePassword(userId, currentPassword, newPassword);
+            passwordWasChanged = true;
         }
 
         // 2. Handle Profile Update (Phone/Name)
@@ -1191,6 +1233,22 @@ exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
 
         if (Object.keys(updateData).length > 0) {
             await UserServices.updateUser(userId, updateData);
+        }
+
+        // 3. Send password changed email (if password was actually changed)
+        if (passwordWasChanged) {
+            try {
+                const user = await prisma.user.findUnique({ where: { userId } });
+                if (user?.email) {
+                    sendEmail({
+                        to: user.email,
+                        subject: 'Password Changed – ShrHomies',
+                        html: passwordChangedEmail({ name: user.userName || 'User' })
+                    });
+                }
+            } catch (emailErr) {
+                console.error('[Email] Failed to send password changed email:', emailErr);
+            }
         }
 
         return res.status(200).json({
@@ -1239,7 +1297,7 @@ exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFu
  * @swagger
  * /api/user/leads/new:
  *   get:
- *     summary: Get list of new leads (Users with Inprogress projects)
+ *     summary: Get list of new leads (Users with pending status)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []
@@ -1264,7 +1322,7 @@ exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) =>
  * @swagger
  * /api/user/leads/closed:
  *   get:
- *     summary: Get list of closed customers (Users with Completed projects)
+ *     summary: Get list of closed customers (Users with inprogress or completed status)
  *     tags: [Users]
  *     security:
  *       - bearerAuth: []

@@ -1,6 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
-import { SupervisorStatus, UserRole, Prisma } from "@prisma/client";
+import { SupervisorStatus, UserRole, Prisma, UserStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
 
 // Create a new supervisor
@@ -313,13 +313,13 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
 
         if (matchedStatus) {
             dataToUpdate.status = matchedStatus;
-            userDataToUpdate.status = matchedStatus === 'Active' ? 'Active' : 'Inactive';
+            userDataToUpdate.status = matchedStatus === 'Active' ? UserStatus.inprogress : UserStatus.completed;
             hasUserUpdates = true;
         } else {
             // If invalid status passed, maybe ignore or throw? 
             // Let's keep existing behavior: cast it (but safer to just use what we have if it matches)
             dataToUpdate.status = updateData.status as SupervisorStatus;
-            userDataToUpdate.status = updateData.status === 'Active' ? 'Active' : 'Inactive';
+            userDataToUpdate.status = updateData.status === 'Active' ? UserStatus.inprogress : UserStatus.completed;
             hasUserUpdates = true;
         }
     }
@@ -421,7 +421,7 @@ export const deleteSupervisor = async (supervisorId: string) => {
                 await prisma.user.update({
                     where: { userId: supervisor.userId },
                     data: {
-                        status: 'Inactive',
+                        status: UserStatus.completed,
                         email: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.email}`,
                         contact: `deleted_${supervisor.userId}_${Date.now()}_${supervisor.phoneNumber}`
                     }

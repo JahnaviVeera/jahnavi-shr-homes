@@ -28,6 +28,9 @@ router.get("/project/:projectId/total-count", authenticate, authorizeRoles("admi
 // Get total expense amount by project (must come before /:expenseId route)
 router.get("/project/:projectId/total-amount", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getTotalExpenseAmountByProject);
 
+// Get all category-wise expenses
+router.get("/category/list", authenticate, ExpenseController.getCategoryWiseExpenses);
+
 // Get expenses by category (must come before /:expenseId route)
 router.get("/category/:category", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getExpensesByCategory);
 

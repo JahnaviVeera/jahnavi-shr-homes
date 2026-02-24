@@ -21,9 +21,21 @@ const ExpenseServices = require("./expense.services");
  *                 type: string
  *                 format: uuid
  *               category:
- *                 type: string
- *                 enum: ["Labor", "Equipment", "Permits", "Materials"]
- *                 example: "Labor"
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     category:
+ *                       type: string
+ *                       example: "Labour"
+ *                     workerName:
+ *                       type: string
+ *                       example: "Ramesh Kumar"
+ *                     amount:
+ *                       type: number
+ *                     paymentMode:
+ *                       type: string
+ *                       example: "Cash"
  *               amount:
  *                 type: number
  *                 format: decimal
@@ -135,6 +147,33 @@ exports.getAllExpenses = async (req: Request, res: Response) => {
 
 /**
  * @swagger
+ * /api/expense/category/list:
+ *   get:
+ *     summary: Get expenses by categorized lists
+ *     tags: [Expenses]
+ *     responses:
+ *       200:
+ *         description: Categorized Expenses fetched successfully
+ */
+exports.getCategoryWiseExpenses = async (req: Request, res: Response) => {
+    try {
+        const expenses = await ExpenseServices.getCategoryWiseExpenses();
+
+        return res.status(200).json({
+            success: true,
+            message: "Category-wise expenses fetched successfully",
+            data: expenses
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
  * /api/expense/project/{projectId}:
  *   get:
  *     summary: Get expenses by project ID
@@ -170,20 +209,9 @@ exports.getExpensesByProject = async (req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/expense/category/{category}:
+ * /api/expense/category:
  *   get:
- *     summary: Get expenses by category
- *     tags: [Expenses]
- *     parameters:
- *       - in: path
- *         name: category
- *         required: true
- *         schema:
- *           type: string
- *           enum: ["Labor", "Equipment", "Permits", "Materials"]
- *     responses:
- *       200:
- *         description: Expenses fetched successfully
+ *     summary: Get expenses by category (deprecated for array categories)
  */
 exports.getExpensesByCategory = async (req: Request, res: Response) => {
     try {
@@ -355,8 +383,18 @@ exports.getTotalExpenseAmountByProject = async (req: Request, res: Response) => 
  *             type: object
  *             properties:
  *               category:
- *                 type: string
- *                 enum: ["Labor", "Equipment", "Permits", "Materials"]
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     category:
+ *                       type: string
+ *                     workerName:
+ *                       type: string
+ *                     amount:
+ *                       type: number
+ *                     paymentMode:
+ *                       type: string
  *               amount:
  *                 type: number
  *                 format: decimal

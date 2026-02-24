@@ -2,21 +2,14 @@
 import { ExpenseCategory, ExpenseStatus, Prisma } from "@prisma/client";
 
 
-// Create a new expense
 export const createExpense = async (data: {
     projectId: string;
-    category: string;
+    category: any;
     amount: number;
     date: Date | string;
     description?: string | null;
     status?: string;
 }) => {
-    // Validate category
-    const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
-    if (!validCategories.includes(data.category)) {
-        throw new Error(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
-    }
-
     // Validate status if provided
     if (data.status !== undefined) {
         const validStatuses = ["pending", "approved", "rejected"];
@@ -48,7 +41,7 @@ export const createExpense = async (data: {
     const newExpense = await prisma.expense.create({
         data: {
             projectId: data.projectId,
-            category: data.category as ExpenseCategory,
+            category: data.category,
             amount: data.amount,
             date: dateString,
             description: data.description || null,
@@ -68,7 +61,16 @@ export const getExpenseById = async (expenseId: string) => {
         include: {
             project: {
                 select: {
-                    projectName: true
+                    projectName: true,
+                    projectId: true,
+                    customer: {
+                        select: {
+                            userName: true,
+                            email: true,
+                            contact: true,
+                            address: true
+                        }
+                    }
                 }
             }
         }
@@ -78,7 +80,55 @@ export const getExpenseById = async (expenseId: string) => {
         throw new Error("Expense not found");
     }
 
-    return expense;
+    let parsedCategory = expense.category;
+    if (typeof parsedCategory === 'string') {
+        try {
+            parsedCategory = JSON.parse(parsedCategory);
+        } catch (e) {
+            // Ignore parse error, return as is
+        }
+    }
+
+    // Fetch all expenses for this particular project
+    const projectExpensesParams = await prisma.expense.findMany({
+        where: { projectId: expense.projectId },
+        orderBy: { date: "desc" }
+    });
+
+    const projectExpenses = projectExpensesParams.map(pe => {
+        let parsedCat = pe.category;
+        if (typeof parsedCat === 'string') {
+            try { parsedCat = JSON.parse(parsedCat); } catch (e) { }
+        }
+        return { ...pe, category: parsedCat };
+    });
+
+    // Total expenses for that project
+    const totalProjectExpenses = projectExpenses.reduce((sum, e) => {
+        return sum + parseFloat(e.amount.toString());
+    }, 0);
+
+    // Total for this particular expense
+    const expenseTotal = parseFloat(expense.amount.toString());
+
+    // Company Details (Dummy data, like in payment)
+    const companyDetails = {
+        name: "SHR Homes",
+        address: "123 Premium Construction Avenue, Hyderabad, Telangana, 500001",
+        contact: "+91 9876543210",
+        email: "info@shrhomes.com",
+        gstin: "22AAAAA0000A1Z5"
+    };
+
+    return {
+        ...expense,
+        category: parsedCategory,
+        expenseTotal,
+        totalProjectExpenses,
+        projectExpenses,
+        customerDetails: expense.project?.customer || null,
+        companyDetails
+    };
 };
 
 // Get all expenses with optional search
@@ -91,12 +141,7 @@ export const getAllExpenses = async (search?: string) => {
             { project: { projectName: { contains: search, mode: 'insensitive' } } }
         ];
 
-        // Check if search matches a category
-        const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
-        const matchedCategory = validCategories.find(c => c.toLowerCase().includes(search.toLowerCase()));
-        if (matchedCategory) {
-            orConditions.push({ category: matchedCategory as ExpenseCategory });
-        }
+        // With array of objects, simple string search on JSON is complex. We'll skip category enum matching.
 
         whereClause.OR = orConditions;
     }
@@ -112,7 +157,59 @@ export const getAllExpenses = async (search?: string) => {
         },
         orderBy: { date: "desc" }
     });
-    return expenses;
+    const parsedExpenses = expenses.map(expense => {
+        let parsedCategory = expense.category;
+        if (typeof parsedCategory === 'string') {
+            try {
+                parsedCategory = JSON.parse(parsedCategory);
+            } catch (e) { }
+        }
+        return { ...expense, category: parsedCategory };
+    });
+
+    return parsedExpenses;
+};
+
+// Get expenses only when a category is added, flattened
+export const getCategoryWiseExpenses = async () => {
+    const expenses = await prisma.expense.findMany({
+        include: {
+            project: { select: { projectName: true } }
+        },
+        orderBy: { date: "desc" }
+    });
+
+    const result: any[] = [];
+
+    expenses.forEach(exp => {
+        let parsedCategory = exp.category;
+        if (typeof parsedCategory === 'string') {
+            try {
+                parsedCategory = JSON.parse(parsedCategory);
+            } catch (e) {
+                parsedCategory = [];
+            }
+        }
+
+        if (Array.isArray(parsedCategory) && parsedCategory.length > 0) {
+            parsedCategory.forEach((cat: any) => {
+                if (cat && cat.category) {
+                    result.push({
+                        expenseId: exp.expenseId,
+                        projectId: exp.projectId,
+                        projectName: exp.project?.projectName || "",
+                        categoryName: cat.category,
+                        date: exp.date,
+                        amount: cat.amount !== undefined ? parseFloat(cat.amount) : parseFloat(exp.amount.toString()),
+                        workerName: cat.workerName || "",
+                        paymentMode: cat.paymentMode || ""
+                    });
+                }
+            });
+        }
+    });
+
+    return result;
 };
 
 // Get expenses by project ID
@@ -128,13 +225,23 @@ export const getExpensesByProject = async (projectId: string) => {
         },
         orderBy: { date: "desc" }
     });
-    return expenses;
+    const parsedExpenses = expenses.map(expense => {
+        let parsedCategory = expense.category;
+        if (typeof parsedCategory === 'string') {
+            try {
+                parsedCategory = JSON.parse(parsedCategory);
+            } catch (e) { }
+        }
+        return { ...expense, category: parsedCategory };
+    });
+
+    return parsedExpenses;
 };
 
-// Get expenses by category
 export const getExpensesByCategory = async (category: string) => {
+    // With JSON arrays, direct prisma querying is complex across databases.
+    // Fetch and filter in-memory since expenses per project are bounded.
     const expenses = await prisma.expense.findMany({
-        where: { category: category as ExpenseCategory },
         include: {
             project: {
                 select: {
@@ -144,7 +251,30 @@ export const getExpensesByCategory = async (category: string) => {
         },
         orderBy: { date: "desc" }
     });
-    return expenses;
+
+    const filtered = expenses.filter(exp => {
+        try {
+            const parsed = typeof exp.category === 'string' ? JSON.parse(exp.category) : exp.category;
+            if (Array.isArray(parsed)) {
+                return parsed.some(c => c.category && String(c.category).toLowerCase().includes(category.toLowerCase()));
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    });
+
+    const parsedExpenses = filtered.map(expense => {
+        let parsedCategory = expense.category;
+        if (typeof parsedCategory === 'string') {
+            try {
+                parsedCategory = JSON.parse(parsedCategory);
+            } catch (e) { }
+        }
+        return { ...expense, category: parsedCategory };
+    });
+
+    return parsedExpenses;
 };
 
 // Get total expense count
@@ -178,7 +308,7 @@ export const getTotalExpenseAmountByProject = async (projectId: string) => {
 
 // Update expense
 export const updateExpense = async (expenseId: string, updateData: {
-    category?: string;
+    category?: any;
     amount?: number;
     date?: Date | string;
     description?: string | null;
@@ -197,13 +327,8 @@ export const updateExpense = async (expenseId: string, updateData: {
         updatedAt: new Date(),
     };
 
-    // Validate category if provided
     if (updateData.category !== undefined) {
-        const validCategories = ["Labor", "Equipment", "Permits", "Materials"];
-        if (!validCategories.includes(updateData.category)) {
-            throw new Error(`Invalid category. Must be one of: ${validCategories.join(", ")}`);
-        }
-        dataToUpdate.category = updateData.category as ExpenseCategory;
+        dataToUpdate.category = updateData.category;
     }
 
     // Validate status if provided

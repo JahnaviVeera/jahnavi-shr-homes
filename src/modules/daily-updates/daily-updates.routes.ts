@@ -44,6 +44,15 @@ router.get("/project/:projectId/timeline", authenticate, authorizeRoles("admin",
 // Body must include 'constructionStage'. Optional: 'image', 'video'
 router.post("/", authenticate, authorizeRoles("supervisor"), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'video', maxCount: 1 }]), DailyUpdatesController.createDailyUpdate);
 
+// Get all admin daily updates (Admin & Supervisor only)
+// Matches GET /api/daily-updates/admin/all
+router.get("/admin/all", authenticate, authorizeRoles("admin", "supervisor"), DailyUpdatesController.getAllAdminDailyUpdates);
+
+// Create a new admin daily update (Supervisor only)
+// Matches POST /api/daily-updates/admin
+// Body must include 'projectId'. Optional: 'quantityConsumption', 'labourWorkers', 'image'
+router.post("/admin", authenticate, authorizeRoles("supervisor"), upload.fields([{ name: 'image', maxCount: 1 }]), DailyUpdatesController.createAdminDailyUpdate);
+
 // Download daily update image
 // Must come before /:dailyUpdateId if using regex, but here it's fine as "image" is literal
 router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.downloadImage);

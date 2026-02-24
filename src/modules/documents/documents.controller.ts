@@ -1,5 +1,8 @@
 ﻿import type { Request, Response } from "express";
 const DocumentServices = require("./documents.services");
+import prisma from "../../config/prisma.client";
+import { sendEmail } from '../../email/emailService';
+import { customerDocumentSentEmail } from '../../email/templates/customer/documentSent';
 
 interface MulterRequest extends Request {
     user?: {
@@ -118,6 +121,31 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             ...req.body,
             userId: req.body.userId || null
         }, file);
+
+        // Email customer if document is linked to a project
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            if (req.body.projectId) {
+                const project = await prisma.project.findUnique({
+                    where: { projectId: req.body.projectId },
+                    include: { customer: true }
+                });
+                if (project?.customer?.email) {
+                    sendEmail({
+                        to: project.customer.email,
+                        subject: `New Document Shared – ShrHomies`,
+                        html: customerDocumentSentEmail({
+                            customerName: project.customer.userName || 'Customer',
+                            documentType: req.body.documentType || 'Document',
+                            projectName: project.projectName,
+                            frontendUrl
+                        })
+                    });
+                }
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send document sent email:', emailErr);
+        }
 
         return res.status(201).json({
             success: true,

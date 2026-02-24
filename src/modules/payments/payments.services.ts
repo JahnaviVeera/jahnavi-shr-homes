@@ -332,6 +332,43 @@ export const getAllThePayments = async (search?: string, supervisorId?: string, 
     return payments;
 };
 
+function amountToWords(amount: number): string {
+    if (amount === 0) return "Zero Rupees Only";
+    const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    const numToWords = (num: number, suffix: string): string => {
+        if (num === 0) return '';
+        if (num < 20) return a[num] + ' ' + suffix;
+        return b[Math.floor(num / 10)] + (num % 10 !== 0 ? ' ' + a[num % 10] : '') + ' ' + suffix;
+    };
+
+    let words = "";
+    let val = Math.floor(Math.abs(amount));
+
+    words += numToWords(Math.floor(val / 10000000), "Crore ");
+    val %= 10000000;
+
+    words += numToWords(Math.floor(val / 100000), "Lakh ");
+    val %= 100000;
+
+    words += numToWords(Math.floor(val / 1000), "Thousand ");
+    val %= 1000;
+
+    words += numToWords(Math.floor(val / 100), "Hundred ");
+    val %= 100;
+
+    if (val > 0) {
+        if (words !== "") words += "and ";
+        if (val < 20) words += a[val];
+        else {
+            words += b[Math.floor(val / 10)] + (val % 10 !== 0 ? ' ' + a[val % 10] : '');
+        }
+    }
+
+    return words.trim() + " Rupees Only";
+}
+
 export const getPaymentByPaymentId = async (paymentId: string) => {
     if (!paymentId) {
         throw new Error("Payment ID is required");
@@ -343,7 +380,15 @@ export const getPaymentByPaymentId = async (paymentId: string) => {
             project: {
                 select: {
                     projectName: true,
-                    projectId: true
+                    projectId: true,
+                    customer: {
+                        select: {
+                            userName: true,
+                            email: true,
+                            contact: true,
+                            address: true
+                        }
+                    }
                 }
             }
         }
@@ -353,7 +398,22 @@ export const getPaymentByPaymentId = async (paymentId: string) => {
         throw new Error("Payment not found");
     }
 
-    return payment;
+    const companyDetails = {
+        name: "SHR Homes",
+        address: "123 Premium Construction Avenue, Hyderabad, Telangana, 500001",
+        contact: "+91 9876543210",
+        email: "info@shrhomes.com",
+        gstin: "22AAAAA0000A1Z5" // Dummy GSTIN
+    };
+
+    const amountInWords = amountToWords(parseFloat(payment.amount.toString()));
+
+    return {
+        ...payment,
+        companyDetails,
+        customerDetails: payment.project?.customer || null,
+        amountInWords
+    };
 };
 
 
