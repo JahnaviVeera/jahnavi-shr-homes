@@ -1,7 +1,13 @@
 ﻿import type { Request, Response } from "express";
-
+import prisma from "../../config/prisma.client";
 const QuotationServices = require("./quotations.services");
 const supervisorService = require("../supervisor/supervisor.services");
+import { sendEmail } from '../../email/emailService';
+import { adminQuotationApprovedEmail } from '../../email/templates/admin/quotationApproved';
+import { adminQuotationRejectedEmail } from '../../email/templates/admin/quotationRejected';
+import { customerQuotationSentEmail } from '../../email/templates/customer/quotationSent';
+import { customerQuotationApprovedEmail } from '../../email/templates/customer/quotationApproved';
+import { customerQuotationRejectedEmail } from '../../email/templates/customer/quotationRejected';
 
 interface RequestWithUser extends Request {
     user?: {
@@ -248,6 +254,31 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
         };
 
         const createdQuotation = await QuotationServices.createQuotation(quotationData, file || undefined);
+
+        // Email Customer: admin sent them a quotation
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            if (quotationData.projectId) {
+                const project = await prisma.project.findUnique({
+                    where: { projectId: quotationData.projectId },
+                    include: { customer: true }
+                });
+                if (project?.customer?.email) {
+                    sendEmail({
+                        to: project.customer.email,
+                        subject: `Your Quotation is Ready – ShrHomies`,
+                        html: customerQuotationSentEmail({
+                            customerName: project.customer.userName || 'Customer',
+                            projectName: project.projectName,
+                            quotationAmount: String(createdQuotation.totalAmount || 0),
+                            frontendUrl
+                        })
+                    });
+                }
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send quotation sent email:', emailErr);
+        }
 
         return res.status(201).json({
             success: true,
@@ -971,6 +1002,30 @@ exports.approveQuotation = async (req: Request, res: Response) => {
 
         const updatedQuotation = await QuotationServices.approveQuotation(quotationId, userId, feedback);
 
+        // Email notifications on customer approve
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const quotation = await prisma.quotation.findUnique({
+                where: { quotationId },
+                include: { project: { include: { customer: true } } }
+            });
+            const customerName = quotation?.project?.customer?.userName || 'Customer';
+            const projectName = quotation?.project?.projectName || 'Your Project';
+            const quotationAmount = String(quotation?.totalAmount || 0);
+
+            // Notify Admin
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+            if (admin?.email) {
+                sendEmail({
+                    to: admin.email,
+                    subject: `Quotation Approved by ${customerName} – ShrHomies`,
+                    html: adminQuotationApprovedEmail({ customerName, projectName, quotationAmount, frontendUrl })
+                });
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send quotation approved emails:', emailErr);
+        }
+
         return res.status(200).json({
             success: true,
             message: "Quotation approved and locked successfully",
@@ -1040,6 +1095,30 @@ exports.rejectQuotation = async (req: Request, res: Response) => {
         }
 
         const updatedQuotation = await QuotationServices.rejectQuotation(quotationId, userId, feedback);
+
+        // Email notifications on customer reject
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            const quotation = await prisma.quotation.findUnique({
+                where: { quotationId },
+                include: { project: { include: { customer: true } } }
+            });
+            const customerName = quotation?.project?.customer?.userName || 'Customer';
+            const projectName = quotation?.project?.projectName || 'Your Project';
+            const reason = feedback;
+
+            // Notify Admin
+            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+            if (admin?.email) {
+                sendEmail({
+                    to: admin.email,
+                    subject: `Quotation Rejected by ${customerName} – ShrHomies`,
+                    html: adminQuotationRejectedEmail({ customerName, projectName, reason, frontendUrl })
+                });
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send quotation rejected emails:', emailErr);
+        }
 
         return res.status(200).json({
             success: true,

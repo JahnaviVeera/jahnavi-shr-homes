@@ -14,6 +14,9 @@ export const createUser = async (data: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
+    location?: string | null;
+    requirements?: string | null;
+    description?: string | null;
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
@@ -43,10 +46,13 @@ export const createUser = async (data: {
         email: data.email,
         password: hashedPassword,
         contact: data.contact,
-        status: data.status || UserStatus.Active,
+        status: data.status || UserStatus.pending,
         estimatedInvestment: data.estimatedInvestment || null,
         notes: data.notes || null,
         companyName: data.companyName || null,
+        location: data.location || null,
+        requirements: data.requirements || null,
+        description: data.description || null,
 
         timezone: (data.timezone === "Eastern Time (ET)" ? Timezone.ET :
             data.timezone === "Central Time (CT)" ? Timezone.CT :
@@ -177,6 +183,9 @@ export const updateUser = async (userId: string, updatedUserData: {
     estimatedInvestment?: number | null;
     notes?: string | null;
     companyName?: string | null;
+    location?: string | null;
+    requirements?: string | null;
+    description?: string | null;
     timezone?: string | null;
     currency?: string | null;
     language?: string | null;
@@ -203,6 +212,9 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
+    if (updatedUserData.location !== undefined) dataToUpdate.location = updatedUserData.location;
+    if (updatedUserData.requirements !== undefined) dataToUpdate.requirements = updatedUserData.requirements;
+    if (updatedUserData.description !== undefined) dataToUpdate.description = updatedUserData.description;
 
     // General Settings
     if (updatedUserData.timezone !== undefined) {
@@ -308,19 +320,19 @@ export const changePassword = async (userId: string, currentPassword: string, ne
 
 // Get Customer Leads Stats
 export const getCustomerLeadsStats = async () => {
-    // New Leads: Users with Active status
+    // New Leads: Users with pending status
     const newLeadsCount = await prisma.user.count({
         where: {
             role: UserRole.customer,
-            status: UserStatus.Active
+            status: UserStatus.pending
         }
     });
 
-    // Closed Customers: Users with Inactive status
+    // Closed Customers: Users with inprogress or completed status
     const closedCustomersCount = await prisma.user.count({
         where: {
             role: UserRole.customer,
-            status: UserStatus.Inactive
+            status: { in: [UserStatus.inprogress, UserStatus.completed] }
         }
     });
 
@@ -331,13 +343,13 @@ export const getCustomerLeadsStats = async () => {
     };
 };
 
-// Get New Leads List (Users with Active status)
+// Get New Leads List (Users with pending status)
 export const getNewLeadsList = async () => {
-    // 1. Get all Active customers
+    // 1. Get all pending customers
     const activeCustomers = await prisma.user.findMany({
         where: {
             role: UserRole.customer,
-            status: UserStatus.Active
+            status: UserStatus.pending
         },
         include: {
             // Include their latest project if needed to show project info
@@ -381,12 +393,12 @@ export const getNewLeadsList = async () => {
     });
 };
 
-// Get Closed Customers List (Users with Inactive status)
+// Get Closed Customers List (Users with inprogress/completed status)
 export const getClosedCustomersList = async () => {
     const inactiveCustomers = await prisma.user.findMany({
         where: {
             role: UserRole.customer,
-            status: UserStatus.Inactive
+            status: { in: [UserStatus.inprogress, UserStatus.completed] }
         },
         include: {
             projects: {

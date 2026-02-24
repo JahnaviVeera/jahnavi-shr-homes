@@ -1,6 +1,7 @@
 ﻿import type { Request, Response } from "express";
 const ProjectServices = require("./project.services");
 
+
 /**
  * @swagger
  * /api/project/createproject:
@@ -81,6 +82,7 @@ exports.createProject = async (req: Request, res: Response) => {
     }
 
 }
+
 
 /**
  * @swagger
@@ -392,6 +394,7 @@ exports.deleteProject = async (req: Request, res: Response) => {
     }
 }
 
+
 /**
  * @swagger
  * /api/project/project-summary:
@@ -468,6 +471,7 @@ exports.getProjectSummary = async (req: Request, res: Response) => {
         });
     }
 };
+
 
 /**
  * @swagger

@@ -1,6 +1,9 @@
 ﻿import prisma from "../../config/prisma.client";
 import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
+import { sendEmail } from '../../email/emailService';
+import { supervisorProjectAssignedEmail } from '../../email/templates/supervisor/projectAssigned';
+import { adminProjectAssignedEmail } from '../../email/templates/admin/projectAssigned';
 
 // Helper function to format date inputs as YYYY-MM-DD strings
 const formatDateString = (dateInput: string | Date | undefined | null): string => {
@@ -459,6 +462,40 @@ export const updateProject = async (projectId: string, updateData: {
                 notificationMessage,
                 notificationType
             );
+
+            // Email notifications on new assignment
+            if (isNewAssignment) {
+                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+                const customerName = updatedProject.customer?.userName || 'Customer';
+                const startDate = updatedProject.startDate || 'TBD';
+
+                // Email Supervisor
+                sendEmail({
+                    to: supervisor.email,
+                    subject: `New Project Assigned – ${updatedProject.projectName}`,
+                    html: supervisorProjectAssignedEmail({
+                        supervisorName: supervisor.fullName || 'Supervisor',
+                        projectName: updatedProject.projectName,
+                        customerName,
+                        startDate: String(startDate),
+                        frontendUrl
+                    })
+                });
+
+                // Email Admin confirmation
+                const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
+                if (admin?.email) {
+                    sendEmail({
+                        to: admin.email,
+                        subject: `Project Assignment Confirmed – ${updatedProject.projectName}`,
+                        html: adminProjectAssignedEmail({
+                            supervisorName: supervisor.fullName || 'Supervisor',
+                            projectName: updatedProject.projectName,
+                            frontendUrl
+                        })
+                    });
+                }
+            }
         }
     }
 

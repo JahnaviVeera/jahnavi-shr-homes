@@ -53,9 +53,7 @@ export const adminLogin = async (email: string, password: string) => {
             throw new AppError(401, "Invalid email or password");
         }
 
-        if (user.status === UserStatus.Inactive) {
-            throw new AppError(403, "Account is inactive. Please contact support.");
-        }
+        // Inactive check removed as status now Tracks lead progress
 
         // 4. Success
         const accessToken = generateAdminToken(user.userId, user.email);
@@ -136,9 +134,7 @@ export const userLogin = async (email: string, password: string) => {
         throw new AppError(401, "Invalid email or password");
     }
 
-    if (user.status === UserStatus.Inactive) {
-        throw new AppError(403, "Account is inactive. Please contact support.");
-    }
+    // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
     const accessToken = generateUserToken(user.userId, user.email, user.role);
@@ -222,9 +218,7 @@ export const supervisorLogin = async (email: string, password: string) => {
         throw new AppError(401, "Invalid email or password");
     }
 
-    if (user.status === UserStatus.Inactive) {
-        throw new AppError(403, "Account is inactive. Please contact support.");
-    }
+    // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
     const accessToken = generateUserToken(user.userId, user.email, user.role);
@@ -294,9 +288,7 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
         throw new AppError(401, "Invalid refresh token");
     }
 
-    if (storedToken.user.status === UserStatus.Inactive) {
-        throw new AppError(403, "Account is inactive. Please contact support.");
-    }
+    // Inactive check removed as status now Tracks lead progress
 
     // 2. Check expiry
     if (new Date() > storedToken.expiresAt) {
@@ -373,7 +365,7 @@ export const adminSignup = async (data: {
             role: UserRole.admin,
             contact: data.contact,
             companyName: data.companyName || "SHR Homes",
-            status: UserStatus.Active,
+            status: UserStatus.pending,
             createdAt: new Date(),
             updatedAt: new Date()
         }

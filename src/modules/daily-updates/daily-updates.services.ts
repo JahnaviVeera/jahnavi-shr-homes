@@ -1,6 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
-import { ConstructionStage, DailyUpdateStatus, Prisma } from "@prisma/client";
+import { ConstructionStage, DailyUpdateStatus, Prisma, UpdateType } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import SocketService from "../../services/socket.service";
 import * as projectService from "../project/project.services";
@@ -170,6 +170,118 @@ export const createDailyUpdate = async (
 };
 
 /**
+ * Create a new admin daily update
+ * @param data - The admin daily update data including projectId, quantityConsumption, and labourWorkers
+ * @param image - Optional image file to upload
+ * @returns The created admin daily update record
+ */
+export const createAdminDailyUpdate = async (
+    data: {
+        projectId?: string | null;
+        quantityConsumption?: Array<any> | null;
+        labourWorkers?: Array<any> | null;
+    },
+    image?: any,
+    supervisorId?: string
+) => {
+    // Validate required fields
+    if (!data.projectId || data.projectId.trim() === "") {
+        throw new Error("Project ID is required for Admin update");
+    }
+
+    // Check if project exists and supervisor is assigned
+    let validProjectId: string = data.projectId;
+    let projectName = "";
+
+    const project = await projectService.getProjectById(data.projectId);
+
+    if (supervisorId) {
+        if (project.supervisorId !== supervisorId) {
+            throw new Error("Unauthorized: You are not assigned to this project and cannot post updates for it.");
+        }
+    }
+    projectName = project.projectName;
+
+    // Validate quantityConsumption structure if provided
+    if (data.quantityConsumption && Array.isArray(data.quantityConsumption)) {
+        for (const consumption of data.quantityConsumption) {
+            if (!consumption.materialName || consumption.materialName.trim() === "") {
+                throw new Error("Material name is required for each consumption entry");
+            }
+            if (!consumption.totalQuantity || consumption.totalQuantity.trim() === "") {
+                throw new Error("Total quantity is required for each consumption entry");
+            }
+            if (!consumption.consumed || consumption.consumed.trim() === "") {
+                throw new Error("Consumed quantity is required for each consumption entry");
+            }
+            if (!consumption.date || consumption.date.trim() === "") {
+                throw new Error("Date is required for each consumption entry");
+            }
+        }
+    }
+
+    // Validate labourWorkers structure if provided
+    if (data.labourWorkers && Array.isArray(data.labourWorkers)) {
+        for (const worker of data.labourWorkers) {
+            if (worker.noOfLabours === undefined || worker.noOfLabours === null) {
+                throw new Error("No. of Labours is required for each worker entry");
+            }
+        }
+    }
+
+    // Upload image to Supabase if provided
+    let imageUrl: string | null = null;
+    let imageId: string | null = null;
+    if (image) {
+        if (!image.mimetype.startsWith('image/')) {
+            throw new Error(`Invalid file type: ${image.mimetype}. Only image files are allowed.`);
+        }
+        try {
+            const uploadResult = await fileUploadService.uploadFile({
+                file: image,
+                bucket: 'uploads',
+                folder: 'daily-updates/admin/images'
+            });
+            imageUrl = uploadResult.publicUrl;
+            imageId = uploadResult.id;
+        } catch (error) {
+            console.error("Error uploading image to Supabase:", error);
+            throw new Error("Failed to upload image to storage: " + (error instanceof Error ? error.message : String(error)));
+        }
+    }
+
+    const newDailyUpdate = await prisma.dailyUpdate.create({
+        data: {
+            projectId: validProjectId,
+            updateType: UpdateType.Admin,
+            quantityConsumption: data.quantityConsumption ? JSON.stringify(data.quantityConsumption) : "[]",
+            labourWorkers: data.labourWorkers ? JSON.stringify(data.labourWorkers) : "[]",
+            imageUrl: imageUrl,
+            imageId: imageId,
+            imageName: image ? image.originalname : null,
+            imageType: image ? image.mimetype : null,
+            // Fallback for ConstructionStage because it has a default in Schema
+            constructionStage: ConstructionStage.Foundation,
+            status: DailyUpdateStatus.pending
+        }
+    });
+
+    // Notify Admins
+    SocketService.getInstance().emitToRole("admin", "admin_daily_update_created", {
+        message: `New Admin daily update submitted for ${projectName}`,
+        dailyUpdateId: newDailyUpdate.dailyUpdateId
+    });
+
+    try {
+        await notifyAdmins(`New Admin daily update submitted for ${projectName}`, "admin_daily_update");
+    } catch (e) {
+        console.error("Failed to notify admins of admin daily update", e);
+    }
+
+    return newDailyUpdate;
+};
+
+/**
  * Get a daily update by its ID
  * @param dailyUpdateId - The UUID of the daily update
  * @returns The daily update record
@@ -248,6 +360,66 @@ export const getAllDailyUpdates = async (supervisorId?: string, customerId?: str
         return [];
     }
     return dailyUpdates;
+};
+
+/**
+ * Get all admin daily updates (UpdateType.Admin)
+ * Supports optional filtering by projectId and/or supervisorId
+ * @param projectId  - Optional: filter by a specific project
+ * @param supervisorId - Optional: filter to only projects assigned to this supervisor
+ * @returns List of all matching admin daily updates
+ */
+export const getAllAdminDailyUpdates = async (
+    projectId?: string,
+    supervisorId?: string
+) => {
+    // Build the where clause dynamically
+    const where: Prisma.DailyUpdateWhereInput = {
+        updateType: UpdateType.Admin,
+    };
+
+    if (projectId && projectId.trim() !== "") {
+        // Filter by a specific project
+        where.projectId = projectId;
+    } else if (supervisorId && supervisorId.trim() !== "") {
+        // Filter to projects assigned to this supervisor only
+        where.project = {
+            supervisorId: supervisorId
+        };
+    }
+
+    const dailyUpdates = await prisma.dailyUpdate.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: {
+            project: {
+                select: {
+                    projectId: true,
+                    projectName: true,
+                    location: true,
+                    supervisorId: true
+                }
+            }
+        }
+    });
+
+    return dailyUpdates.map(update => {
+        let parsedQuantityConsumption = update.quantityConsumption;
+        let parsedLabourWorkers = update.labourWorkers;
+
+        if (typeof parsedQuantityConsumption === 'string') {
+            try { parsedQuantityConsumption = JSON.parse(parsedQuantityConsumption); } catch (e) { parsedQuantityConsumption = []; }
+        }
+        if (typeof parsedLabourWorkers === 'string') {
+            try { parsedLabourWorkers = JSON.parse(parsedLabourWorkers); } catch (e) { parsedLabourWorkers = []; }
+        }
+
+        return {
+            ...update,
+            quantityConsumption: parsedQuantityConsumption,
+            labourWorkers: parsedLabourWorkers
+        };
+    });
 };
 
 /**

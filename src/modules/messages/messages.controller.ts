@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import prisma from "../../config/prisma.client";
 const MessageServices = require("./messages.services");
+import { sendEmail } from '../../email/emailService';
+import { adminCustomerMessageEmail } from '../../email/templates/admin/customerMessage';
+import { adminSupervisorMessageEmail } from '../../email/templates/admin/supervisorMessage';
+import { supervisorMessageReceivedEmail } from '../../email/templates/supervisor/messageReceived';
 
 interface AuthenticatedRequest extends Request {
     user?: {
@@ -116,6 +120,18 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
                     parentId: null
                 });
 
+                // Email Admin: customer sent a message
+                const senderUser = await prisma.user.findUnique({ where: { userId: senderId } });
+                sendEmail({
+                    to: admin.email,
+                    subject: `New Message from ${senderUser?.userName || 'Customer'} – ShrHomies`,
+                    html: adminCustomerMessageEmail({
+                        customerName: senderUser?.userName || 'Customer',
+                        message,
+                        frontendUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+                    })
+                });
+
                 // 4. Send to Supervisor (if exists)
                 if (project.supervisor?.userId) {
                     await MessageServices.createMessage({
@@ -127,6 +143,22 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
                         projectId,
                         parentId: null
                     });
+
+                    // Email Supervisor: customer sent a message
+                    const supervisorUser = await prisma.user.findUnique({ where: { userId: project.supervisor.userId } });
+                    if (supervisorUser?.email) {
+                        sendEmail({
+                            to: supervisorUser.email,
+                            subject: `New Message from ${senderUser?.userName || 'Customer'} – ShrHomies`,
+                            html: supervisorMessageReceivedEmail({
+                                supervisorName: supervisorUser.userName || 'Supervisor',
+                                senderName: senderUser?.userName || 'Customer',
+                                senderRole: 'customer',
+                                message,
+                                frontendUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+                            })
+                        });
+                    }
                 }
 
                 return res.status(201).json({
@@ -147,6 +179,41 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response) => {
             projectId,
             parentId
         });
+
+        // Email notifications for supervisor <-> admin messages
+        if (receiverId) {
+            const receiver = await prisma.user.findUnique({ where: { userId: receiverId } });
+            const senderInfo = await prisma.user.findUnique({ where: { userId: senderId! } });
+
+            if (receiver && senderInfo) {
+                // Supervisor messaging Admin
+                if (req.user.role === 'supervisor' && receiver.role === 'admin') {
+                    sendEmail({
+                        to: receiver.email,
+                        subject: `New Message from ${senderInfo.userName || 'Supervisor'} – ShrHomies`,
+                        html: adminSupervisorMessageEmail({
+                            supervisorName: senderInfo.userName || 'Supervisor',
+                            message,
+                            frontendUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+                        })
+                    });
+                }
+                // Admin messaging Supervisor
+                else if (req.user.role === 'admin' && receiver.role === 'supervisor') {
+                    sendEmail({
+                        to: receiver.email,
+                        subject: `New Message from Admin – ShrHomies`,
+                        html: supervisorMessageReceivedEmail({
+                            supervisorName: receiver.userName || 'Supervisor',
+                            senderName: senderInfo.userName || 'Admin',
+                            senderRole: 'admin',
+                            message,
+                            frontendUrl: process.env.FRONTEND_URL || 'http://localhost:8080'
+                        })
+                    });
+                }
+            }
+        }
 
         return res.status(201).json({
             success: true,
