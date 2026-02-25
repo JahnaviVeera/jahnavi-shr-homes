@@ -60,6 +60,7 @@ enum DailyUpdateStatus {
   pending
   approved
   rejected
+  Approval_Requested @map("Approval Requested")
 
   @@map("daily_updates_status_enum")
 }
@@ -119,7 +120,6 @@ enum QuotationStatus {
 // MODELS
 // ------------------------------------------------------
 
-
 enum Timezone {
   ET  @map("Eastern Time (ET)")
   CT  @map("Central Time (CT)")
@@ -156,19 +156,19 @@ enum UserStatus {
 }
 
 model User {
-  userId              String      @id @default(uuid()) @db.Uuid
-  userName            String      @db.VarChar(255)
+  userId              String     @id @default(uuid()) @db.Uuid
+  userName            String     @db.VarChar(255)
   role                UserRole
-  email               String      @db.VarChar(100)
-  password            String?     @db.VarChar(255)
-  contact             String      @db.VarChar(15)
-  status              UserStatus  @default(pending)
-  estimatedInvestment Decimal?    @db.Decimal(12, 2)
-  notes               String?     @db.Text
-  companyName         String?     @db.VarChar(255)
-  location            String?     @db.VarChar(255)
-  requirements        String?     @db.Text
-  description         String?     @db.Text
+  email               String     @db.VarChar(100)
+  password            String?    @db.VarChar(255)
+  contact             String     @db.VarChar(15)
+  status              UserStatus @default(pending)
+  estimatedInvestment Decimal?   @db.Decimal(12, 2)
+  notes               String?    @db.Text
+  companyName         String?    @db.VarChar(255)
+  location            String?    @db.VarChar(255)
+  requirements        String?    @db.Text
+  description         String?    @db.Text
 
   // General Settings
   timezone Timezone? @default(UTC)
@@ -201,7 +201,7 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-model Notification { 
+model Notification {
   notificationId String @id @default(uuid()) @db.Uuid
   userId         String @db.Uuid
   user           User   @relation(fields: [userId], references: [userId])
@@ -229,8 +229,8 @@ model Supervisor {
   updatedAt    DateTime         @updatedAt @map("updated_at")
 
   userId String @unique @db.Uuid
-  
-  projectId String? @db.Uuid // Added per user request
+
+  projectId String?   @db.Uuid // Added per user request
   projects  Project[]
 
   @@map("supervisors")
@@ -255,7 +255,6 @@ model Project {
   priority           String?       @default("Medium") @db.VarChar(50)
   currency           String?       @default("INR") @db.VarChar(20)
   description        String?       @db.Text
-
 
   // New Fields Matching UI
   customerId String @db.Uuid
@@ -289,9 +288,9 @@ model Message {
   projectId String?  @db.Uuid
   project   Project? @relation(fields: [projectId], references: [projectId])
 
-  parentId   String?   @db.Uuid
-  parent     Message?  @relation("MessageReplies", fields: [parentId], references: [messageId])
-  replies    Message[] @relation("MessageReplies")
+  parentId String?   @db.Uuid
+  parent   Message?  @relation("MessageReplies", fields: [parentId], references: [messageId])
+  replies  Message[] @relation("MessageReplies")
 
   isRead Boolean @default(false)
 
@@ -313,7 +312,7 @@ model DailyUpdate {
   videoUrl          String?           @map("video_url") @db.VarChar(500)
   videoId           String?           @map("video_id") @db.VarChar(255)
   status            DailyUpdateStatus @default(pending)
-  
+
   updateType          UpdateType @default(Customer)
   quantityConsumption Json?      @default("[]")
   labourWorkers       Json?      @default("[]")
@@ -364,11 +363,11 @@ model Expense {
   projectId String  @db.Uuid
   project   Project @relation(fields: [projectId], references: [projectId])
 
-  category    Json            @default("[]") // Array of objects: { category, workerName, amount, paymentMode }
-  amount      Decimal         @db.Decimal(12, 2) // Will still remain as total amount
-  date        String          @db.VarChar(10)
-  description String?         @db.Text
-  status      ExpenseStatus   @default(pending)
+  category    Json          @default("[]") // Array of objects: { category, workerName, amount, paymentMode }
+  amount      Decimal       @db.Decimal(12, 2) // Will still remain as total amount
+  date        String        @db.VarChar(10)
+  description String?       @db.Text
+  status      ExpenseStatus @default(pending)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -495,11 +494,11 @@ model EmailLog {
   id        String   @id @default(uuid()) @db.Uuid
   to        String   @db.VarChar(255)
   subject   String   @db.VarChar(500)
-  status    String   @default("sent")   @db.VarChar(20) // "sent" | "failed"
-  resendId  String?  @map("resend_id")  @db.VarChar(255) // ID returned by Resend
-  error     String?  @db.Text           // Error message if failed
-  event     String?  @db.VarChar(100)   // e.g. "project_assigned", "payment_verified"
-  createdAt DateTime @default(now())    @map("created_at")
+  status    String   @default("sent") @db.VarChar(20) // "sent" | "failed"
+  resendId  String?  @map("resend_id") @db.VarChar(255) // ID returned by Resend
+  error     String?  @db.Text // Error message if failed
+  event     String?  @db.VarChar(100) // e.g. "project_assigned", "payment_verified"
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("email_logs")
 }
