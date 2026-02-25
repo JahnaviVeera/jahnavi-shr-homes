@@ -60,6 +60,9 @@ router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "super
 // Download daily update video
 router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.downloadVideo);
 
+// Request approval for a daily update (Supervisor only) — changes status from pending → Approval_Requested
+router.put("/:dailyUpdateId/request-approval", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.requestApprovalForDailyUpdate);
+
 // Approve daily update (Authenticated Customer)
 router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("customer"), DailyUpdatesController.approveDailyUpdate);
 

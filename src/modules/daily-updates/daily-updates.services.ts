@@ -1162,3 +1162,66 @@ export const getSupervisorStats = async (supervisorId: string) => {
         approved: approvedCount
     };
 };
+
+/**
+ * Request approval for a daily update (Supervisor only)
+ * Changes the status from 'pending' to 'Approval_Requested'.
+ * Validates that the update belongs to a project assigned to this supervisor.
+ * @param dailyUpdateId - ID of the daily update
+ * @param supervisorId - ID of the authenticated supervisor
+ * @returns The updated daily update record
+ */
+export const requestApproval = async (dailyUpdateId: string, supervisorId: string) => {
+    // Find the daily update
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    if (!dailyUpdate.projectId) {
+        throw new Error("Daily update is not linked to any project");
+    }
+
+    // Verify the supervisor is assigned to this project
+    const project = await projectService.getProjectById(dailyUpdate.projectId);
+
+    if (project.supervisorId !== supervisorId) {
+        throw new Error("Unauthorized: You are not assigned to this project");
+    }
+
+    // Only pending updates can request approval
+    if (dailyUpdate.status !== DailyUpdateStatus.pending) {
+        throw new Error(`Cannot request approval. Current status is '${dailyUpdate.status}'. Only 'pending' updates can request approval.`);
+    }
+
+    // Update status to Approval_Requested
+    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            status: DailyUpdateStatus.Approval_Requested,
+            updatedAt: new Date(),
+        },
+    });
+
+    // Notify Admins via socket
+    SocketService.getInstance().emitToRole("admin", "daily_update_approval_requested", {
+        message: `Supervisor requested approval for a daily update on project ${project.projectName}`,
+        dailyUpdateId,
+        projectId: dailyUpdate.projectId,
+    });
+
+    // Persist admin notification
+    try {
+        await notifyAdmins(
+            `Approval requested for daily update on project "${project.projectName}"`,
+            "approval_requested"
+        );
+    } catch (e) {
+        console.error("Failed to notify admins for approval request:", e);
+    }
+
+    return updatedDailyUpdate;
+};

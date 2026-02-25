@@ -1285,3 +1285,60 @@ export const getAllAdminDailyUpdates = async (req: RequestWithUser, res: Respons
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/request-approval:
+ *   put:
+ *     summary: Request approval for a daily update (Supervisor only)
+ *     description: Changes the status of a daily update from 'pending' to 'Approval Requested'. Only the supervisor assigned to the project can do this.
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the daily update to request approval for
+ *     responses:
+ *       200:
+ *         description: Approval requested successfully
+ *       400:
+ *         description: Bad request (wrong status, not found, etc.)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden – Supervisor not assigned to this project
+ */
+export const requestApprovalForDailyUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        // Resolve supervisor entity from the logged-in user
+        const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+        const supervisorId = supervisor.supervisorId;
+
+        const updatedUpdate = await DailyUpdatesServices.requestApproval(dailyUpdateId, supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Approval requested successfully",
+            data: updatedUpdate,
+        });
+    } catch (error) {
+        if (error instanceof Error && error.message.includes("Unauthorized")) {
+            return res.status(403).json({ success: false, message: error.message });
+        }
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
