@@ -66,7 +66,7 @@ export const createMaterial = async (data: {
             materialName: data.materialName,
             quantity: quantity,
             units: data.units as any,
-            date: parsedDate.toISOString().split('T')[0] ?? "",
+            date: `${String(parsedDate.getDate()).padStart(2, '0')}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${parsedDate.getFullYear()}`,
             notes: data.notes || null,
             vendor: data.vendor || null,
             createdAt: new Date(),
@@ -292,7 +292,7 @@ export const updateMaterial = async (materialId: string, updateData: {
         if (isNaN(parsedDate.getTime())) {
             throw new Error("Invalid date format. Expected YYYY-MM-DD or DD-MM-YYYY.");
         }
-        dataToUpdate.date = parsedDate.toISOString().split('T')[0];
+        dataToUpdate.date = `${String(parsedDate.getDate()).padStart(2, '0')}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${parsedDate.getFullYear()}`;
     }
 
     if (updateData.notes !== undefined) {
