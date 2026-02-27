@@ -205,16 +205,24 @@ export const createAdminDailyUpdate = async (
     // Validate quantityConsumption structure if provided
     if (data.quantityConsumption && Array.isArray(data.quantityConsumption)) {
         for (const consumption of data.quantityConsumption) {
-            if (!consumption.materialName || consumption.materialName.trim() === "") {
+            // Support multiple key variations that the frontend might be sending
+            const matName = consumption.materialName || consumption.material || consumption.MaterialName || consumption.name;
+            if (!matName || String(matName).trim() === "") {
                 throw new Error("Material name is required for each consumption entry");
             }
-            if (!consumption.totalQuantity || consumption.totalQuantity.trim() === "") {
+
+            const totQty = consumption.totalQuantity || consumption.quantity || consumption.TotalQuantity || consumption.total;
+            if (totQty === undefined || String(totQty).trim() === "") {
                 throw new Error("Total quantity is required for each consumption entry");
             }
-            if (!consumption.consumed || consumption.consumed.trim() === "") {
+
+            const cons = consumption.consumed || consumption.Consumed || consumption.consumedQuantity || consumption.usage;
+            if (cons === undefined || String(cons).trim() === "") {
                 throw new Error("Consumed quantity is required for each consumption entry");
             }
-            if (!consumption.date || consumption.date.trim() === "") {
+
+            const dt = consumption.date || consumption.Date || consumption.consumptionDate;
+            if (!dt || String(dt).trim() === "") {
                 throw new Error("Date is required for each consumption entry");
             }
         }
