@@ -102,7 +102,7 @@ export const createPayment = async (data: {
             paymentType: pType,
             paymentMethod: pMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
-            paymentDate: new Date(data.paymentDate).toISOString().split('T')[0] ?? "",
+            paymentDate: `${String(new Date(data.paymentDate).getDate()).padStart(2, '0')}-${String(new Date(data.paymentDate).getMonth() + 1).padStart(2, '0')}-${new Date(data.paymentDate).getFullYear()}`,
             remarks: data.remarks || null,
             fileUrl: fileUrl,
             fileId: fileId,
@@ -233,7 +233,7 @@ export const updatePayment = async (paymentId: string, updateData: {
     if (updateData.paymentType !== undefined) dataToUpdate.paymentType = pType;
     if (updateData.paymentMethod !== undefined) dataToUpdate.paymentMethod = normalizePaymentMethod(updateData.paymentMethod);
     if (parsedBreakup !== undefined) dataToUpdate.paymentBreakup = JSON.stringify(parsedBreakup);
-    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = new Date(updateData.paymentDate).toISOString().split('T')[0] ?? "";
+    if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = `${String(new Date(updateData.paymentDate).getDate()).padStart(2, '0')}-${String(new Date(updateData.paymentDate).getMonth() + 1).padStart(2, '0')}-${new Date(updateData.paymentDate).getFullYear()}`;
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
 
     // Handle file update if provided
@@ -329,7 +329,45 @@ export const getAllThePayments = async (search?: string, supervisorId?: string, 
         }
     });
 
-    return payments;
+    const parsedPayments = payments.map(payment => {
+        let parsedBreakup = payment.paymentBreakup;
+        let methodDisplay = payment.paymentMethod as string;
+
+        if (payment.paymentType === 'MultiMode' && parsedBreakup) {
+            try {
+                const breakupArr = typeof parsedBreakup === 'string'
+                    ? JSON.parse(parsedBreakup as string)
+                    : parsedBreakup;
+
+                parsedBreakup = breakupArr;
+
+                if (Array.isArray(breakupArr) && breakupArr.length > 0) {
+                    // Extract methods and join them (e.g. "Bank Transfer, UPI")
+                    methodDisplay = breakupArr.map((b: any) => b.method).filter(Boolean).join(', ');
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+        }
+
+        // Attempt to convert DB format to DD-MM-YYYY if it's not already
+        let displayDate = payment.paymentDate;
+        if (displayDate && displayDate.includes('-')) {
+            const parts = displayDate.split('-');
+            if (parts[0].length === 4) { // It's YYYY-MM-DD
+                displayDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+
+        return {
+            ...payment,
+            paymentBreakup: parsedBreakup,
+            paymentMethod: methodDisplay,
+            paymentDate: displayDate
+        };
+    });
+
+    return parsedPayments;
 };
 
 function amountToWords(amount: number): string {
@@ -408,8 +446,40 @@ export const getPaymentByPaymentId = async (paymentId: string) => {
 
     const amountInWords = amountToWords(parseFloat(payment.amount.toString()));
 
+    let parsedBreakup = payment.paymentBreakup;
+    let methodDisplay = payment.paymentMethod as string;
+
+    if (payment.paymentType === 'MultiMode' && parsedBreakup) {
+        try {
+            const breakupArr = typeof parsedBreakup === 'string'
+                ? JSON.parse(parsedBreakup as string)
+                : parsedBreakup;
+
+            parsedBreakup = breakupArr;
+
+            if (Array.isArray(breakupArr) && breakupArr.length > 0) {
+                // Extract methods and join them (e.g. "Bank Transfer, UPI")
+                methodDisplay = breakupArr.map((b: any) => b.method).filter(Boolean).join(', ');
+            }
+        } catch (e) {
+            // Ignore parsing errors
+        }
+    }
+
+    // Attempt to convert DB format to DD-MM-YYYY if it's not already
+    let displayDate = payment.paymentDate;
+    if (displayDate && displayDate.includes('-')) {
+        const parts = displayDate.split('-');
+        if (parts[0].length === 4) { // It's YYYY-MM-DD
+            displayDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+    }
+
     return {
         ...payment,
+        paymentBreakup: parsedBreakup,
+        paymentMethod: methodDisplay,
+        paymentDate: displayDate,
         companyDetails,
         customerDetails: payment.project?.customer || null,
         amountInWords
