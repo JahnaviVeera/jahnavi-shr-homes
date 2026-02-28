@@ -69,6 +69,9 @@ router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("customer"), 
 // Reject daily update (Authenticated Customer)
 router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("customer"), DailyUpdatesController.rejectDailyUpdate);
 
+// Add feedback to daily update (Customer only)
+router.post("/:dailyUpdateId/feedback", authenticate, authorizeRoles("customer"), DailyUpdatesController.addFeedback);
+
 // Get daily update by ID (General access, maybe restricted later?)
 router.get("/:dailyUpdateId", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.getDailyUpdateById);
 

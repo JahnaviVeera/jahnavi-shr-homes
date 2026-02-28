@@ -317,6 +317,8 @@ model DailyUpdate {
   quantityConsumption Json?      @default("[]")
   labourWorkers       Json?      @default("[]")
 
+  feedback          String?    @db.Text
+
   projectId String?  @db.Uuid
   project   Project? @relation(fields: [projectId], references: [projectId])
 
