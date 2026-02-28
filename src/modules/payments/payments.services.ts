@@ -354,8 +354,11 @@ export const getAllThePayments = async (search?: string, supervisorId?: string, 
         let displayDate = payment.paymentDate;
         if (displayDate && displayDate.includes('-')) {
             const parts = displayDate.split('-');
-            if (parts.length === 3 && parts[0] && parts[0].length === 4) { // It's YYYY-MM-DD
-                displayDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            const year = parts[0];
+            const month = parts[1];
+            const day = parts[2];
+            if (year && month && day && year.length === 4) { // It's YYYY-MM-DD
+                displayDate = `${day}-${month}-${year}`;
             }
         }
 
@@ -470,8 +473,11 @@ export const getPaymentByPaymentId = async (paymentId: string) => {
     let displayDate = payment.paymentDate;
     if (displayDate && displayDate.includes('-')) {
         const parts = displayDate.split('-');
-        if (parts.length === 3 && parts[0] && parts[0].length === 4) { // It's YYYY-MM-DD
-            displayDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        const year = parts[0];
+        const month = parts[1];
+        const day = parts[2];
+        if (year && month && day && year.length === 4) { // It's YYYY-MM-DD
+            displayDate = `${day}-${month}-${year}`;
         }
     }
 
