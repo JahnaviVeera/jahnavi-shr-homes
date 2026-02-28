@@ -1233,3 +1233,67 @@ export const requestApproval = async (dailyUpdateId: string, supervisorId: strin
 
     return updatedDailyUpdate;
 };
+
+/**
+ * Add feedback to a daily update (Customer only)
+ * @param dailyUpdateId - ID of the daily update
+ * @param userId - ID of the customer providing feedback
+ * @param feedback - The feedback content
+ * @returns The updated daily update record
+ */
+export const addFeedback = async (dailyUpdateId: string, userId: string, feedback: string) => {
+    // Check if the update exists
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: {
+            project: true
+        }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    // Check if the current user is the customer assigned to this project
+    if (dailyUpdate.project && dailyUpdate.project.customerId !== userId) {
+        throw new Error("Unauthorized to add feedback to this daily update");
+    }
+
+    // Update the daily update with feedback
+    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            feedback: feedback,
+            updatedAt: new Date(),
+        },
+        include: {
+            project: {
+                include: {
+                    supervisor: true
+                }
+            }
+        }
+    });
+
+    // Notify Supervisor via socket
+    if (updatedDailyUpdate.project?.supervisor?.userId) {
+        SocketService.getInstance().emitToUser(
+            updatedDailyUpdate.project.supervisor.userId,
+            "daily_update_feedback_received",
+            {
+                message: `New feedback received on a daily update for project ${updatedDailyUpdate.project.projectName}`,
+                dailyUpdateId,
+                projectId: updatedDailyUpdate.projectId,
+            }
+        );
+
+        // Also notify via standard notification
+        await notifyUser(
+            updatedDailyUpdate.project.supervisor.userId,
+            `Customer added feedback to daily update on project "${updatedDailyUpdate.project.projectName}"`,
+            "feedback_received"
+        );
+    }
+
+    return updatedDailyUpdate;
+};

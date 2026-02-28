@@ -12,7 +12,7 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 
 
 router.get("/", authenticate, authorizeRoles("admin"), UserController.getAllUsers);
-router.get("/getallusers", authenticate, authorizeRoles("admin"), UserController.getAllUsers);
+router.get("/getallusers", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getAllUsers);
 router.get("/leads/stats", authenticate, authorizeRoles("admin"), UserController.getCustomerLeadsStats);
 router.get("/leads/new", authenticate, authorizeRoles("admin"), UserController.getNewLeads);
 router.get("/leads/closed", authenticate, authorizeRoles("admin"), UserController.getClosedCustomers);

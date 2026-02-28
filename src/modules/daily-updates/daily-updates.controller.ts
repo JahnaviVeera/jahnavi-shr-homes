@@ -1342,3 +1342,74 @@ export const requestApprovalForDailyUpdate = async (req: RequestWithUser, res: R
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/feedback:
+ *   post:
+ *     summary: Add feedback to a daily update (Customer only)
+ *     description: Allows a customer to add feedback to a specific daily update.
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the daily update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["feedback"]
+ *             properties:
+ *               feedback:
+ *                 type: string
+ *                 example: "Looks good, but please clear the debris."
+ *                 description: The feedback comment
+ *     responses:
+ *       200:
+ *         description: Feedback added successfully
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+export const addFeedback = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const { feedback } = req.body;
+
+        if (!req.user || req.user.role !== 'customer') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Customer access required" });
+        }
+
+        if (!feedback || feedback.trim() === "") {
+            return res.status(400).json({ success: false, message: "Feedback content is required" });
+        }
+
+        const userId = req.user.userId;
+        const updatedUpdate = await DailyUpdatesServices.addFeedback(dailyUpdateId, userId, feedback);
+
+        return res.status(200).json({
+            success: true,
+            message: "Feedback added successfully",
+            data: updatedUpdate,
+        });
+    } catch (error) {
+        if (error instanceof Error && error.message.includes("Unauthorized")) {
+            return res.status(403).json({ success: false, message: error.message });
+        }
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
