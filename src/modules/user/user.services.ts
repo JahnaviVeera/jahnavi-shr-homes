@@ -208,7 +208,30 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.role !== undefined) dataToUpdate.role = (updatedUserData.role === "user" ? UserRole.customer : updatedUserData.role) as UserRole;
     if (updatedUserData.email !== undefined) dataToUpdate.email = updatedUserData.email;
     if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
-    if (updatedUserData.status !== undefined) dataToUpdate.status = updatedUserData.status;
+    if (updatedUserData.status !== undefined) {
+        // Normalise whatever the frontend sends to the exact Prisma UserStatus enum value.
+        // The DB enum is: pending | inprogress | completed (all lowercase, no spaces).
+        const statusMap: Record<string, UserStatus> = {
+            // Lowercase / compact (the DB native values)
+            pending: UserStatus.pending,
+            inprogress: UserStatus.inprogress,
+            completed: UserStatus.completed,
+            // Title-case variants (sent by the frontend select)
+            Pending: UserStatus.pending,
+            'In Progress': UserStatus.inprogress,
+            Completed: UserStatus.completed,
+            // Any other possible variants
+            'in progress': UserStatus.inprogress,
+            PENDING: UserStatus.pending,
+            INPROGRESS: UserStatus.inprogress,
+            COMPLETED: UserStatus.completed,
+        };
+        const normalisedStatus = statusMap[updatedUserData.status as string];
+        if (!normalisedStatus) {
+            throw new Error(`Invalid status value: "${updatedUserData.status}". Expected one of: pending, inprogress, completed`);
+        }
+        dataToUpdate.status = normalisedStatus;
+    }
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
     if (updatedUserData.notes !== undefined) dataToUpdate.notes = updatedUserData.notes;
     if (updatedUserData.companyName !== undefined) dataToUpdate.companyName = updatedUserData.companyName;
