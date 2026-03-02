@@ -1,5 +1,5 @@
 ﻿import prisma from "../../config/prisma.client";
-import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus } from "@prisma/client";
+import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus, UserStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
 import { sendEmail } from '../../email/emailService';
 import { supervisorProjectAssignedEmail } from '../../email/templates/supervisor/projectAssigned';
@@ -124,6 +124,18 @@ export const createProject = async (data:
             updatedAt: new Date(),
         }
     });
+
+    // ─── Auto-promote lead status ────────────────────────────────────────────
+    // When a project is assigned to a customer who is still a "new lead"
+    // (status = pending), automatically upgrade their status to 'inprogress'.
+    // This moves them from the "New Leads" tab to "Closed Customers" in the UI.
+    if (customer.status === UserStatus.pending) {
+        await prisma.user.update({
+            where: { userId: data.customerId as string },
+            data: { status: UserStatus.inprogress },
+        });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Notify Admin
     SocketService.getInstance().emitToRole("admin", "project_created", newProject);
