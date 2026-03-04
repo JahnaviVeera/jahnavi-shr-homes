@@ -1,6 +1,6 @@
 ﻿import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
-import { ConstructionStage, DailyUpdateStatus, Prisma, UpdateType } from "@prisma/client";
+import { ConstructionStage, DailyUpdateStatus, Prisma, UpdateType, ProjectStatus } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import SocketService from "../../services/socket.service";
 import * as projectService from "../project/project.services";
@@ -116,6 +116,8 @@ export const createDailyUpdate = async (
             data.constructionStage as ConstructionStage;
 
     const statusEnum = data.status as DailyUpdateStatus || DailyUpdateStatus.pending;
+
+    // No stage-locking: supervisors can upload updates for any stage at any time
 
 
     const newDailyUpdate = await prisma.dailyUpdate.create({
@@ -346,7 +348,9 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
  * @returns List of all daily updates
  */
 export const getAllDailyUpdates = async (supervisorId?: string, customerId?: string) => {
-    const where: Prisma.DailyUpdateWhereInput = {};
+    const where: Prisma.DailyUpdateWhereInput = {
+        updateType: 'Customer'
+    };
 
     if (supervisorId) {
         where.project = {
@@ -448,7 +452,8 @@ export const getDailyUpdatesForSupervisor = async (supervisorId: string) => {
     // Fetch Daily Updates for these projects
     const dailyUpdates = await prisma.dailyUpdate.findMany({
         where: {
-            projectId: { in: projectIds }
+            projectId: { in: projectIds },
+            updateType: 'Customer'
         },
         select: {
             projectId: true,
@@ -608,6 +613,24 @@ export const updateDailyUpdate = async (
         }
     }
 
+    // RESTRICTION: Check if the stage is already approved for this project
+    const projectIdForCheck = (updateData.projectId || dailyUpdate.projectId) as string;
+    const stageEnumForCheck = (dataToUpdate.constructionStage || dailyUpdate.constructionStage) as ConstructionStage;
+
+    if (projectIdForCheck) {
+        const approvedUpdate = await prisma.dailyUpdate.findFirst({
+            where: {
+                projectId: projectIdForCheck,
+                constructionStage: stageEnumForCheck,
+                status: DailyUpdateStatus.approved
+            }
+        });
+
+        if (approvedUpdate) {
+            throw new Error(`This stage has already been approved by the customer. You cannot modify updates for an approved stage.`);
+        }
+    }
+
     const updatedDailyUpdate = await prisma.dailyUpdate.update({
         where: { dailyUpdateId },
         data: dataToUpdate,
@@ -687,7 +710,8 @@ export const getDailyUpdatesForUser = async (userId: string) => {
     // 2. Fetch daily updates for these projects
     const dailyUpdates = await prisma.dailyUpdate.findMany({
         where: {
-            projectId: { in: projectIds }
+            projectId: { in: projectIds },
+            updateType: 'Customer'
         },
         orderBy: { createdAt: "desc" },
         include: {
@@ -782,10 +806,16 @@ export const getDailyUpdatesByStatusForUser = async (userId: string, status: str
     // Find daily updates for these projects with the given status
     const statusEnum = status as DailyUpdateStatus;
 
+    let finalStatusCondition: any = statusEnum;
+    if (status === 'pending') {
+        finalStatusCondition = { in: [DailyUpdateStatus.pending, DailyUpdateStatus.Approval_Requested] };
+    }
+
     const dailyUpdates = await prisma.dailyUpdate.findMany({
         where: {
             projectId: { in: projectIds },
-            status: statusEnum
+            status: finalStatusCondition,
+            updateType: 'Customer'
         },
         orderBy: { createdAt: "desc" },
         include: {
@@ -844,7 +874,16 @@ export const getDailyUpdatesByStatus = async (status: string, supervisorId?: str
     }
 
     const statusEnum = status as DailyUpdateStatus;
-    const where: Prisma.DailyUpdateWhereInput = { status: statusEnum };
+
+    let finalStatusCondition: any = statusEnum;
+    if (status === 'pending') {
+        finalStatusCondition = { in: [DailyUpdateStatus.pending, DailyUpdateStatus.Approval_Requested] };
+    }
+
+    const where: Prisma.DailyUpdateWhereInput = {
+        status: finalStatusCondition,
+        updateType: 'Customer'
+    };
 
     if (supervisorId) {
         where.project = { supervisorId };
@@ -1102,9 +1141,14 @@ export const getConstructionTimeline = async (projectId: string, supervisorId?: 
         if (stageUpdates.length > 0) {
             // Check if any is approved
             const approved = stageUpdates.find(u => u.status === DailyUpdateStatus.approved);
+            const inReview = stageUpdates.find(u => u.status === DailyUpdateStatus.Approval_Requested);
+
             if (approved) {
                 status = "Completed";
                 date = approved.updatedAt; // Completion date
+            } else if (inReview) {
+                status = "Pending Review";
+                date = inReview.updatedAt;
             } else {
                 // If any pending or rejected, it's considered In Progress/Active attempt
                 // Use the latest one for date
@@ -1200,9 +1244,10 @@ export const requestApproval = async (dailyUpdateId: string, supervisorId: strin
         throw new Error("Unauthorized: You are not assigned to this project");
     }
 
-    // Only pending updates can request approval
-    if (dailyUpdate.status !== DailyUpdateStatus.pending) {
-        throw new Error(`Cannot request approval. Current status is '${dailyUpdate.status}'. Only 'pending' updates can request approval.`);
+    // Allow pending or rejected updates to request approval
+    const allowedStatuses: DailyUpdateStatus[] = [DailyUpdateStatus.pending, DailyUpdateStatus.rejected];
+    if (!allowedStatuses.includes(dailyUpdate.status)) {
+        throw new Error(`Cannot request approval. Current status is '${dailyUpdate.status}'. Only 'pending' or 'rejected' updates can request approval.`);
     }
 
     // Update status to Approval_Requested
@@ -1259,11 +1304,15 @@ export const addFeedback = async (dailyUpdateId: string, userId: string, feedbac
         throw new Error("Unauthorized to add feedback to this daily update");
     }
 
-    // Update the daily update with feedback
+    // Update the daily update with feedback AND auto-approve it:
+    // When a customer sends feedback on any update (pending or approval_requested),
+    // the update is automatically approved. No need for supervisor to explicitly
+    // request approval — customer feedback counts as approval.
     const updatedDailyUpdate = await prisma.dailyUpdate.update({
         where: { dailyUpdateId },
         data: {
             feedback: feedback,
+            status: DailyUpdateStatus.approved,
             updatedAt: new Date(),
         },
         include: {
@@ -1275,13 +1324,34 @@ export const addFeedback = async (dailyUpdateId: string, userId: string, feedbac
         }
     });
 
+    // Recalculate and update project progress
+    if (updatedDailyUpdate.projectId) {
+        const approvedUpdates = await prisma.dailyUpdate.findMany({
+            where: {
+                projectId: updatedDailyUpdate.projectId,
+                status: DailyUpdateStatus.approved,
+                updateType: 'Customer'
+            },
+            select: { constructionStage: true }
+        });
+
+        const uniqueStages = new Set(approvedUpdates.map(u => u.constructionStage));
+        const totalStages = 6;
+        const newProgress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+
+        await prisma.project.update({
+            where: { projectId: updatedDailyUpdate.projectId },
+            data: { progress: newProgress }
+        });
+    }
+
     // Notify Supervisor via socket
     if (updatedDailyUpdate.project?.supervisor?.userId) {
         SocketService.getInstance().emitToUser(
             updatedDailyUpdate.project.supervisor.userId,
             "daily_update_feedback_received",
             {
-                message: `New feedback received on a daily update for project ${updatedDailyUpdate.project.projectName}`,
+                message: `Customer provided feedback and approved a daily update for project ${updatedDailyUpdate.project.projectName}`,
                 dailyUpdateId,
                 projectId: updatedDailyUpdate.projectId,
             }
@@ -1290,10 +1360,165 @@ export const addFeedback = async (dailyUpdateId: string, userId: string, feedbac
         // Also notify via standard notification
         await notifyUser(
             updatedDailyUpdate.project.supervisor.userId,
-            `Customer added feedback to daily update on project "${updatedDailyUpdate.project.projectName}"`,
+            `Customer provided feedback and approved a daily update on project "${updatedDailyUpdate.project.projectName}"`,
             "feedback_received"
         );
     }
 
     return updatedDailyUpdate;
+};
+
+/**
+ * Mark a construction stage as complete for a project (Supervisor)
+ * This notifies the customer to review and approve the stage.
+ */
+export const markStageComplete = async (projectId: string, stage: string, supervisorId: string) => {
+    // 1. Verify supervisor assignment
+    const project = await projectService.getProjectById(projectId);
+    if (project.supervisorId !== supervisorId) {
+        throw new Error("Unauthorized: You are not assigned to this project");
+    }
+
+    // 2. Normalize and validate stage
+    const normalizeInputStage = (s: string): ConstructionStage => {
+        const clean = s.trim().replace(/\s+/g, '_').replace(/&/g, '___');
+        // Match against Enum keys or Mapped values
+        if (clean === "Plumbing____Electrical" || clean === "Plumbing_&_Electrical" || clean === "Plumbing_And_Electrical")
+            return ConstructionStage.Plumbing___Electrical;
+        if (clean === "Interior_Walls" || clean === "Interior_walls")
+            return ConstructionStage.Interior_Walls;
+
+        // Literal match check
+        const validValues = Object.values(ConstructionStage);
+        if (validValues.includes(clean as ConstructionStage)) return clean as ConstructionStage;
+
+        // Fallback or fuzzy match could go here, but let's be strict with a better error
+        throw new Error(`Invalid construction stage: "${s}". Valid stages are: Foundation, Framing, Plumbing & Electrical, Interior Walls, Painting, Finishing`);
+    };
+
+    const stageEnum = normalizeInputStage(stage);
+
+    const updatesToUpdate = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId,
+            constructionStage: stageEnum,
+            status: DailyUpdateStatus.pending
+        }
+    });
+
+    // 3. Mark these updates as 'Approval_Requested'
+    if (updatesToUpdate.length > 0) {
+        await prisma.dailyUpdate.updateMany({
+            where: {
+                dailyUpdateId: { in: updatesToUpdate.map(u => u.dailyUpdateId) }
+            },
+            data: { status: DailyUpdateStatus.Approval_Requested }
+        });
+    } else {
+        // If no updates yet but supervisor wants to mark it complete (might happen),
+        // we should still allow triggering the notification but maybe we need at least one record.
+        // For now, let's assume there are updates.
+    }
+
+    // 4. Send notification to Customer
+    if (project.customer?.userId) {
+        const customerMsg = `The ${stage} stage for project "${project.projectName}" has been marked complete. Please review and approve.`;
+        await notifyUser(project.customer.userId, customerMsg, "stage_approval_required", `${projectId}:${stage}`);
+
+        SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
+            type: "STAGE_APPROVAL_REQUIRED",
+            message: customerMsg,
+            projectId,
+            stage
+        });
+    }
+
+    return { success: true, message: `Stage ${stage} marked for review` };
+};
+
+/**
+ * Approve a construction stage for a project (Customer)
+ * This marks all updates for that stage as 'approved' and notifies the supervisor.
+ */
+export const approveStage = async (projectId: string, stage: string, userId: string) => {
+    // 1. Verify customer ownership
+    const project = await projectService.getProjectById(projectId);
+    if (project.customer?.userId !== userId) {
+        throw new Error("Unauthorized: You are not the owner of this project");
+    }
+
+    // 2. Normalize and validate stage
+    const normalizeInputStage = (s: string): ConstructionStage => {
+        const clean = s.trim().replace(/\s+/g, '_').replace(/&/g, '___');
+        if (clean === "Plumbing____Electrical" || clean === "Plumbing_&_Electrical" || clean === "Plumbing_And_Electrical")
+            return ConstructionStage.Plumbing___Electrical;
+        if (clean === "Interior_Walls" || clean === "Interior_walls")
+            return ConstructionStage.Interior_Walls;
+
+        const validValues = Object.values(ConstructionStage);
+        if (validValues.includes(clean as ConstructionStage)) return clean as ConstructionStage;
+
+        throw new Error(`Invalid construction stage: "${s}"`);
+    };
+
+    const stageEnum = normalizeInputStage(stage);
+
+    // 3. Mark all updates for this stage and project as 'approved'
+    await prisma.dailyUpdate.updateMany({
+        where: {
+            projectId,
+            constructionStage: stageEnum,
+            status: { in: [DailyUpdateStatus.pending, DailyUpdateStatus.Approval_Requested] }
+        },
+        data: {
+            status: DailyUpdateStatus.approved,
+            updatedAt: new Date()
+        }
+    });
+
+    // 4. Notify Supervisor
+    if (project.supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({
+            where: { supervisorId: project.supervisorId }
+        });
+
+        if (supervisor) {
+            const supervisorMsg = `Customer has APPROVED the ${stage} stage for project "${project.projectName}". You can no longer upload updates for this stage.`;
+            await notifyUser(supervisor.userId, supervisorMsg, "stage_approved", `${projectId}:${stage}`);
+
+            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+                type: "STAGE_APPROVED",
+                message: supervisorMsg,
+                projectId,
+                stage
+            });
+        }
+    }
+
+    // 5. Update Project Progress
+    // Calculate progress based on unique approved stages
+    const allApprovedUpdates = await prisma.dailyUpdate.findMany({
+        where: {
+            projectId: projectId,
+            status: DailyUpdateStatus.approved
+        },
+        select: { constructionStage: true }
+    });
+
+    const uniqueStages = new Set(allApprovedUpdates.map(u => u.constructionStage));
+
+    // We expect exactly 6 distinct stages for 100% progress
+    const totalDefinedStages = 6;
+    const newProgress = Math.min(Math.round((uniqueStages.size / totalDefinedStages) * 100), 100);
+
+    await prisma.project.update({
+        where: { projectId: projectId },
+        data: {
+            progress: newProgress,
+            // If all 6 stages are done, mark project as completed
+            initialStatus: newProgress === 100 ? ProjectStatus.Completed : ProjectStatus.Inprogress
+        }
+    });
+
+    return { success: true, message: `Stage ${stage} approved successfully` };
 };

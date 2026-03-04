@@ -1413,3 +1413,67 @@ export const addFeedback = async (req: RequestWithUser, res: Response) => {
         });
     }
 };
+
+/**
+ * Mark a construction stage as complete for a project (Supervisor only)
+ */
+export const markStageComplete = async (req: RequestWithUser, res: Response) => {
+    try {
+        const { projectId, stage } = req.body;
+
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Supervisor access required" });
+        }
+
+        if (!projectId || !stage) {
+            return res.status(400).json({ success: false, message: "Project ID and Stage Name are required" });
+        }
+
+        const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+        const supervisorId = supervisor.supervisorId;
+
+        const result = await DailyUpdatesServices.markStageComplete(projectId, stage, supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * Approve a construction stage for a project (Customer only)
+ */
+export const approveStage = async (req: RequestWithUser, res: Response) => {
+    try {
+        const { projectId, stage } = req.body;
+
+        if (!req.user || req.user.role !== 'customer') {
+            return res.status(401).json({ success: false, message: "Unauthorized: Customer access required" });
+        }
+
+        if (!projectId || !stage) {
+            return res.status(400).json({ success: false, message: "Project ID and Stage Name are required" });
+        }
+
+        const userId = req.user.userId;
+        const result = await DailyUpdatesServices.approveStage(projectId, stage, userId);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: result
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};

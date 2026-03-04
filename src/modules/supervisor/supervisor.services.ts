@@ -169,21 +169,28 @@ export const getSupervisorProfile = async (supervisorId: string) => {
         throw new Error("Supervisor not found");
     }
 
-    // Active: Not Completed (Planning, Inprogress, OnHold)
-    const activeProjectsCount = await prisma.project.count({
-        where: {
-            supervisorId,
-            initialStatus: {
-                not: 'Completed' as any
+    const assignedProjects = await prisma.project.findMany({
+        where: { supervisorId },
+        include: {
+            dailyUpdates: {
+                where: { status: 'approved' as any },
+                select: { constructionStage: true }
             }
         }
     });
 
-    // Completed: Status is Completed
-    const completedProjectsCount = await prisma.project.count({
-        where: {
-            supervisorId,
-            initialStatus: 'Completed' as any
+    let activeProjectsCount = 0;
+    let completedProjectsCount = 0;
+
+    assignedProjects.forEach(project => {
+        const uniqueStages = new Set(project.dailyUpdates.map(u => u.constructionStage));
+        const progress = Math.min(Math.round((uniqueStages.size / 6) * 100), 100);
+
+        // A project is completed if its status is marked as 'Completed' or progress reached 100
+        if (project.initialStatus === 'Completed' as any || progress === 100) {
+            completedProjectsCount++;
+        } else {
+            activeProjectsCount++;
         }
     });
 

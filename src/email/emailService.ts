@@ -13,11 +13,22 @@ export async function sendEmail({ to, subject, html, event }: SendEmailOptions):
     let status = 'sent';
     let errorMessage: string | undefined;
 
+    // DEVELOPMENT OVERRIDE: 
+    // If in development, force send to the verified testing email address
+    // This bypasses the "Can only send testing emails to your own email address" restriction.
+    const actualRecipient = process.env.NODE_ENV === 'development'
+        ? 'jahnaviveeranala08@gmail.com'
+        : to;
+
+    if (process.env.NODE_ENV === 'development' && actualRecipient !== to) {
+        console.log(`[Email] 👨‍💻 Dev Mode: Redirecting email from ${to} to verified tester ${actualRecipient}`);
+    }
+
     try {
         const { data, error } = await resend.emails.send({
             from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
-            to,
-            subject,
+            to: actualRecipient,
+            subject: `[DEV to: ${to}] ${subject}`, // Keep original destination in subject for tracking
             html,
         });
 

@@ -72,12 +72,13 @@ export const markAllAsRead = async (userId: string) => {
 };
 
 // Internal service to create notification (for use by other modules)
-export const createNotification = async (userId: string, message: string, type?: string) => {
+export const createNotification = async (userId: string, message: string, type?: string, referenceId?: string) => {
     const notification = await prisma.notification.create({
         data: {
             userId,
             message,
-            type: type || null
+            type: type || null,
+            referenceId: referenceId || null
         }
     });
     return notification;
@@ -106,6 +107,6 @@ export const notifyAdmins = async (message: string, type?: string) => {
 };
 
 // Wrapper for notifying a specific user
-export const notifyUser = async (userId: string, message: string, type?: string) => {
-    return await createNotification(userId, message, type);
+export const notifyUser = async (userId: string, message: string, type?: string, referenceId?: string) => {
+    return await createNotification(userId, message, type, referenceId);
 };

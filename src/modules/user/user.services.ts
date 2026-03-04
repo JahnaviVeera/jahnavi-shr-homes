@@ -500,7 +500,10 @@ export const getCustomerDashboardStats = async (userId: string) => {
         // Wait, daily updates are usually approved by the customer?
         // Yes, schema has "approveDailyUpdate" by customer.
         // So status 'pending' means waiting for customer approval.
-        const pendingUpdates = project.dailyUpdates.filter(du => du.status === 'pending').length;
+        const pendingUpdates = project.dailyUpdates.filter(du =>
+            (du.status === 'pending' || du.status === 'Approval_Requested') &&
+            du.updateType === 'Customer'
+        ).length;
         pendingApprovals += pendingUpdates;
     }
 

@@ -23,6 +23,7 @@ router.get("/getallpayments", authenticate, authorizeRoles("admin", "supervisor"
 router.get("/budget-summary", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getBudgetSummary); // Budget summary probably admin only? Or allow supervisor/user? Prompt says "Payments" creation is admin only. Viewing is usually open. Let's start with all authenticated for View, except general summary which might be sensitive.
 // Let's check "Customer will only have view access". So View is OK.
 router.get("/budget-summary/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getBudgetSummaryByProject);
+router.get("/next-receipt-number/:projectId", authenticate, authorizeRoles("admin"), paymentController.getNextReceiptNumber);
 
 export default router;
 

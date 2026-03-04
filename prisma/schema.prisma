@@ -206,9 +206,10 @@ model Notification {
   userId         String @db.Uuid
   user           User   @relation(fields: [userId], references: [userId])
 
-  message String  @db.Text
-  type    String? @db.VarChar(50) // 'daily_update', 'payment', etc.
-  isRead  Boolean @default(false)
+  message     String  @db.Text
+  type        String? @db.VarChar(50) // 'daily_update', 'payment', etc.
+  referenceId String? @db.VarChar(255) @map("reference_id")
+  isRead      Boolean @default(false)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -439,6 +440,7 @@ model Payment {
   paymentMethod  PaymentMethod @default(cash)
   paymentBreakup Json?         @default("[]") @map("payment_breakup")
   paymentDate    String        @db.VarChar(10)
+  receiptNumber  String?       @map("receipt_number") @db.VarChar(50)
   remarks        String?       @db.Text
 
   // File upload fields

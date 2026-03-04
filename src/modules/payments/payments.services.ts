@@ -16,16 +16,17 @@ const normalizePaymentType = (type?: string): PaymentType => {
 // Helper to normalize PaymentMethod
 const normalizePaymentMethod = (method?: string): PaymentMethod => {
     if (!method) return PaymentMethod.cash;
-    const lower = method.toLowerCase();
-    switch (lower) {
-        case 'cash': return PaymentMethod.cash;
-        case 'card': return PaymentMethod.card;
-        case 'bank_transfer': return PaymentMethod.bank_transfer;
-        case 'cheque': return PaymentMethod.cheque;
-        case 'online': return PaymentMethod.online;
-        case 'upi': return PaymentMethod.UPI;
-        default: return PaymentMethod.cash;
-    }
+    const lower = method.toLowerCase().replace(/\s+/g, '_');
+
+    // Handle specific mappings from frontend display strings
+    if (lower === 'bank_transfer' || lower === 'bank') return PaymentMethod.bank_transfer;
+    if (lower === 'check' || lower === 'cheque') return PaymentMethod.cheque;
+    if (lower === 'upi') return PaymentMethod.UPI;
+    if (lower === 'cash') return PaymentMethod.cash;
+    if (lower === 'card') return PaymentMethod.card;
+    if (lower === 'online') return PaymentMethod.online;
+
+    return PaymentMethod.cash;
 };
 
 export const createPayment = async (data: {
@@ -88,11 +89,10 @@ export const createPayment = async (data: {
     }
 
     // Validate Project via Service (Decoupled)
-    // data.projectId is required (string)
     const project = await projectService.getProjectById(data.projectId);
 
-    // Check if customer exists for the project
-    // project.customer is included in getProjectById
+    // Generate Receipt Number
+    const receiptNumber = await generateReceiptNumber(project);
 
     const newPayment = await prisma.payment.create({
         data: {
@@ -103,6 +103,7 @@ export const createPayment = async (data: {
             paymentMethod: pMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
             paymentDate: `${String(new Date(data.paymentDate).getDate()).padStart(2, '0')}-${String(new Date(data.paymentDate).getMonth() + 1).padStart(2, '0')}-${new Date(data.paymentDate).getFullYear()}`,
+            receiptNumber: receiptNumber,
             remarks: data.remarks || null,
             fileUrl: fileUrl,
             fileId: fileId,
@@ -629,12 +630,55 @@ export const getBudgetSummaryByProject = async (projectId: string) => {
 
     return {
         projectId: project.projectId,
-        projectName: project.projectName || "",
-        totalBudget: Math.round(totalBudget * 100) / 100,
+        projectName: project.projectName,
+        totalBudget: totalBudget,
         paidAmount: Math.round(paidAmount * 100) / 100,
-        pendingAmount: Math.round(pendingAmount * 100) / 100,
+        pendingAmount: Math.round((totalBudget - paidAmount) * 100) / 100,
         progressPercentage: progressPercentage,
         totalExpense: Math.round(totalExpense * 100) / 100,
         budgetConsumed: budgetConsumed
     };
+};
+
+/**
+ * Generate the next receipt number for a project/customer
+ * Format: SHR + [First 2 letters of Customer Name] + [Sequence Number]
+ */
+export const generateReceiptNumber = async (project: any) => {
+    const customerName = project?.customer?.userName || "Customer";
+    const namePrefix = customerName.substring(0, 2).toUpperCase();
+    const receiptPrefix = `SHR${namePrefix}`;
+
+    // Find the last payment with this prefix
+    const lastPayment = await prisma.payment.findFirst({
+        where: {
+            receiptNumber: {
+                startsWith: receiptPrefix
+            }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+
+    let nextSequence = 1;
+    if (lastPayment && lastPayment.receiptNumber) {
+        // Extract sequence number from the end
+        const sequencePart = lastPayment.receiptNumber.substring(receiptPrefix.length);
+        const lastSeq = parseInt(sequencePart);
+        if (!isNaN(lastSeq)) {
+            nextSequence = lastSeq + 1;
+        }
+    }
+
+    return `${receiptPrefix}${String(nextSequence).padStart(3, '0')}`;
+};
+
+/**
+ * Public service to get the next receipt number for a specific project
+ */
+export const getNextReceiptNumber = async (projectId: string) => {
+    const project = await projectService.getProjectById(projectId);
+    const receiptNumber = await generateReceiptNumber(project);
+    return { receiptNumber };
 };
