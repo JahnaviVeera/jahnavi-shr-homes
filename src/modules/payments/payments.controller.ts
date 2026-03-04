@@ -663,3 +663,20 @@ exports.getBudgetSummaryByProject = async (req: Request, res: Response) => {
         })
     }
 }
+
+// Get the next receipt number for a project
+exports.getNextReceiptNumber = async (req: Request, res: Response) => {
+    try {
+        const projectId = req.params.projectId as string;
+        const result = await PaymentServices.getNextReceiptNumber(projectId);
+        return res.status(200).json({
+            success: true,
+            data: result,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
