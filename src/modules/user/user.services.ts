@@ -297,15 +297,60 @@ export const updateUser = async (userId: string, updatedUserData: {
 }
 
 export const deleteUser = async (userId: string) => {
-    const user = await prisma.user.findUnique({ where: { userId } })
+    const user = await prisma.user.findUnique({ where: { userId } });
 
     if (!user) {
-        throw new Error("User not found")
+        throw new Error("User not found");
     }
 
-    const deletedUser = await prisma.user.delete({ where: { userId } });
+    // Use a transaction to manually cascade delete related records
+    // since Prisma SQL defaults to RESTRICT for required foreign keys
+    const deletedUser = await prisma.$transaction(async (tx) => {
+        // 1. Get all projects owned by this user
+        const projects = await tx.project.findMany({ where: { customerId: userId } });
+        const projectIds = projects.map(p => p.projectId);
+
+        if (projectIds.length > 0) {
+            // Delete project-related entities
+            await tx.dailyUpdate.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.expense.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.material.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.payment.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.document.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.quotation.deleteMany({ where: { projectId: { in: projectIds } } });
+            await tx.message.deleteMany({ where: { projectId: { in: projectIds } } });
+
+            // Delete the projects
+            await tx.project.deleteMany({ where: { customerId: userId } });
+        }
+
+        // 2. Delete user-specific related entities
+        await tx.notification.deleteMany({ where: { userId } });
+        await tx.refreshToken.deleteMany({ where: { userId } });
+        await tx.document.deleteMany({ where: { userId } });
+        await tx.quotation.deleteMany({ where: { userId } });
+
+        // Delete messages where user is sender or receiver
+        await tx.message.deleteMany({
+            where: {
+                OR: [
+                    { senderId: userId },
+                    { receiverId: userId }
+                ]
+            }
+        });
+
+        // If user is a supervisor, delete supervisor record
+        if (user.role === 'supervisor') {
+            await tx.supervisor.deleteMany({ where: { userId } });
+        }
+
+        // 3. Finally, delete the user
+        return tx.user.delete({ where: { userId } });
+    });
+
     return deletedUser;
-}
+};
 
 // Change password
 export const changePassword = async (userId: string, currentPassword: string, newPassword: string) => {
