@@ -1,5 +1,10 @@
 ﻿import type { Request, Response } from "express";
 const ExpenseServices = require("./expense.services");
+import { fileUploadService } from "../../services/fileUpload.service";
+
+interface MulterRequest extends Request {
+    file?: Express.Multer.File;
+}
 
 /**
  * @swagger
@@ -57,9 +62,36 @@ const ExpenseServices = require("./expense.services");
  *       403:
  *         description: Forbidden - Admin or supervisor privileges required
  */
-exports.createExpense = async (req: Request, res: Response) => {
+exports.createExpense = async (req: MulterRequest, res: Response) => {
     try {
-        const expenseData = await ExpenseServices.createExpense(req.body);
+        let { category, ...rest } = req.body;
+
+        // Form data sends complex objects as strings, so we must parse it
+        if (typeof category === 'string') {
+            try {
+                category = JSON.parse(category);
+            } catch (error) {
+                return res.status(400).json({ success: false, message: "Invalid category format layout in FormData" });
+            }
+        }
+
+        const expenseDataInput = { ...rest, category };
+
+        // Handle File Upload if provided
+        if (req.file) {
+            try {
+                const uploadResult = await fileUploadService.uploadFile({
+                    file: req.file,
+                    bucket: 'documents', // Storing in existing documents bucket, categorized by folder
+                    folder: 'expenses'
+                });
+                expenseDataInput.receiptUrl = uploadResult.publicUrl;
+            } catch (uploadError) {
+                return res.status(500).json({ success: false, message: "Failed to upload receipt file" });
+            }
+        }
+
+        const expenseData = await ExpenseServices.createExpense(expenseDataInput);
 
         return res.status(201).json({
             success: true,

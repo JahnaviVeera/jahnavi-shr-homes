@@ -129,10 +129,14 @@ export const createProject = async (data:
     // When a project is assigned to a customer who is still a "new lead"
     // (status = pending), automatically upgrade their status to 'inprogress'.
     // This moves them from the "New Leads" tab to "Closed Customers" in the UI.
+    // We also clear their notes as requested when converting Lead -> Customer
     if (customer.status === UserStatus.pending) {
         await prisma.user.update({
             where: { userId: data.customerId as string },
-            data: { status: UserStatus.inprogress },
+            data: {
+                status: UserStatus.inprogress,
+                notes: ""
+            },
         });
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -425,6 +429,17 @@ export const updateProject = async (projectId: string, updateData: {
             throw new Error(`Customer with ID ${updateData.customerId} not found`);
         }
         dataToUpdate.customer = { connect: { userId: updateData.customerId } };
+
+        // Auto-promote lead if they are just pending, and clear their notes
+        if (customer.status === UserStatus.pending) {
+            await prisma.user.update({
+                where: { userId: updateData.customerId },
+                data: {
+                    status: UserStatus.inprogress,
+                    notes: ""
+                }
+            });
+        }
     }
 
     if (updateData.supervisorId !== undefined && updateData.supervisorId !== null) {

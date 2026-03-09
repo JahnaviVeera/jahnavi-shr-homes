@@ -2,6 +2,7 @@
 const router = express.Router();
 const ExpenseController = require("./expense.controller");
 const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
+const upload = require("../../config/multer.config").default || require("../../config/multer.config");
 
 /**
  * @swagger
@@ -41,7 +42,7 @@ router.get("/", ExpenseController.getAllExpenses);
 // Wait, prompt said: "Admin privilages: 7)Expenses... For all above routes admin should only can create".
 // Supervisor privileges: "1)Uploading dailyupdates 2)Material Usage".
 // So Expenses creation is ADMIN ONLY.
-router.post("/", authenticate, authorizeRoles("admin"), ExpenseController.createExpense);
+router.post("/", authenticate, authorizeRoles("admin"), upload.single("receipt"), ExpenseController.createExpense);
 
 // Get expense by ID
 router.get("/:expenseId", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getExpenseById);
