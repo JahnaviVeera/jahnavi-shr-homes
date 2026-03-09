@@ -5,10 +5,11 @@ import { ExpenseCategory, ExpenseStatus, Prisma } from "@prisma/client";
 export const createExpense = async (data: {
     projectId: string;
     category: any;
-    amount: number;
+    amount: number | string;
     date: Date | string;
     description?: string | null;
     status?: string;
+    receiptUrl?: string;
 }) => {
     // Validate status if provided
     if (data.status !== undefined) {
@@ -23,7 +24,8 @@ export const createExpense = async (data: {
         throw new Error("Project ID is required");
     }
 
-    if (!data.amount || data.amount <= 0) {
+    const numericAmount = parseFloat((data.amount || "0").toString());
+    if (isNaN(numericAmount) || numericAmount <= 0) {
         throw new Error("Amount must be greater than 0");
     }
 
@@ -42,10 +44,11 @@ export const createExpense = async (data: {
         data: {
             projectId: data.projectId,
             category: data.category,
-            amount: data.amount,
+            amount: numericAmount,
             date: dateString,
             description: data.description || null,
             status: data.status as ExpenseStatus || ExpenseStatus.pending,
+            receiptUrl: data.receiptUrl || null,
             createdAt: new Date(),
             updatedAt: new Date(),
         }

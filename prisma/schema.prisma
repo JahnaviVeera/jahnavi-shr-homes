@@ -273,6 +273,7 @@ model Project {
   payments     Payment[]
   quotations   Quotation[]
   messages     Message[]
+  purchases    Purchase[]
 
   @@map("projects")
 }
@@ -371,6 +372,7 @@ model Expense {
   date        String        @db.VarChar(10)
   description String?       @db.Text
   status      ExpenseStatus @default(pending)
+  receiptUrl  String?       @map("receipt_url") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -505,4 +507,18 @@ model EmailLog {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("email_logs")
+}
+
+// -------------------------------------------------------
+// PURCHASES
+// -------------------------------------------------------
+model Purchase {
+  id           Int      @id @default(autoincrement())
+  projectId    String   @db.Uuid
+  project      Project  @relation(fields: [projectId], references: [projectId])
+  materialName String   @db.VarChar(255)
+  price        Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("purchases")
 }
