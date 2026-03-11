@@ -443,6 +443,8 @@ model Payment {
   paymentBreakup Json?         @default("[]") @map("payment_breakup")
   paymentDate    String        @db.VarChar(10)
   receiptNumber  String?       @map("receipt_number") @db.VarChar(50)
+  referenceNumber String?      @map("reference_number") @db.VarChar(20)
+  receivedBy     String?       @map("received_by") @db.VarChar(255)
   remarks        String?       @db.Text
 
   // File upload fields

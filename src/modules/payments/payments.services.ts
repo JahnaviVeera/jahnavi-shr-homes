@@ -29,6 +29,21 @@ const normalizePaymentMethod = (method?: string): PaymentMethod => {
     return PaymentMethod.cash;
 };
 
+// Helper to validate referenceNumber based on paymentMethod
+const validateReferenceNumber = (method: PaymentMethod, referenceNumber?: string | null, context = ""): void => {
+    const prefix = context ? `${context}: ` : "";
+    if (method === PaymentMethod.UPI || method === PaymentMethod.bank_transfer) {
+        if (!referenceNumber || !/^\d{12}$/.test(referenceNumber)) {
+            throw new Error(`${prefix}'${method}' requires an exactly 12-digit referenceNumber.`);
+        }
+    } else if (method === PaymentMethod.cheque) {
+        if (!referenceNumber || !/^\d{6}$/.test(referenceNumber)) {
+            throw new Error(`${prefix}'cheque' requires an exactly 6-digit referenceNumber.`);
+        }
+    }
+    // cash and others: no validation required
+};
+
 export const createPayment = async (data: {
     amount: number,
     projectId: string,
@@ -38,6 +53,11 @@ export const createPayment = async (data: {
     paymentBreakup?: any[],
     paymentDate: Date | string,
     remarks?: string | null,
+    referenceNumber?: string | null,
+    receivedBy?: string | null,
+    recievedBy?: string | null,
+    receivedby?: string | null,
+    recievedby?: string | null,
 }, file?: {
     buffer: Buffer;
     originalname: string;
@@ -68,6 +88,15 @@ export const createPayment = async (data: {
         if (Math.abs(totalBreakup - data.amount) > 0.01) {
             throw new Error(`Total breakup amount (${totalBreakup}) must match the payment amount (${data.amount})`);
         }
+
+        // Validate referenceNumber inside each breakup entry
+        parsedBreakup.forEach((item: any, index: number) => {
+            const itemMethod = normalizePaymentMethod(item.method || "");
+            validateReferenceNumber(itemMethod, item.referenceNumber, `Breakup entry #${index + 1}`);
+        });
+    } else {
+        // Standard mode - validate top-level referenceNumber
+        validateReferenceNumber(pMethod, data.referenceNumber);
     }
 
     // Upload file if provided
@@ -97,13 +126,15 @@ export const createPayment = async (data: {
     const newPayment = await prisma.payment.create({
         data: {
             amount: data.amount,
-            projectId: data.projectId,
+            project: { connect: { projectId: data.projectId } },
             paymentStatus: data.paymentStatus as PaymentStatus,
             paymentType: pType,
             paymentMethod: pMethod,
             paymentBreakup: parsedBreakup ? JSON.stringify(parsedBreakup) : Prisma.JsonNull,
             paymentDate: `${String(new Date(data.paymentDate).getDate()).padStart(2, '0')}-${String(new Date(data.paymentDate).getMonth() + 1).padStart(2, '0')}-${new Date(data.paymentDate).getFullYear()}`,
             receiptNumber: receiptNumber,
+            referenceNumber: data.referenceNumber || null,
+            receivedBy: data.receivedBy || data.recievedBy || data.receivedby || data.recievedby || null,
             remarks: data.remarks || null,
             fileUrl: fileUrl,
             fileId: fileId,
@@ -150,6 +181,11 @@ export const updatePayment = async (paymentId: string, updateData: {
     paymentBreakup?: any[],
     paymentDate?: Date | string,
     remarks?: string | null,
+    referenceNumber?: string | null,
+    receivedBy?: string | null,
+    recievedBy?: string | null,
+    receivedby?: string | null,
+    recievedby?: string | null,
     updatedAt?: Date
 }, file?: {
     buffer: Buffer;
@@ -219,6 +255,15 @@ export const updatePayment = async (paymentId: string, updateData: {
         }
     }
 
+    // Validate referenceNumber if method is being updated
+    if (updateData.paymentMethod !== undefined || updateData.referenceNumber !== undefined) {
+        const methodToCheck = updateData.paymentMethod !== undefined ? normalizePaymentMethod(updateData.paymentMethod) : payment.paymentMethod;
+        const refToCheck = updateData.referenceNumber !== undefined ? updateData.referenceNumber : payment.referenceNumber;
+        if (pType !== PaymentType.MultiMode) {
+            validateReferenceNumber(methodToCheck, refToCheck);
+        }
+    }
+
 
     const dataToUpdate: Prisma.PaymentUpdateInput = {
         updatedAt: new Date(),
@@ -236,6 +281,16 @@ export const updatePayment = async (paymentId: string, updateData: {
     if (parsedBreakup !== undefined) dataToUpdate.paymentBreakup = JSON.stringify(parsedBreakup);
     if (updateData.paymentDate !== undefined) dataToUpdate.paymentDate = `${String(new Date(updateData.paymentDate).getDate()).padStart(2, '0')}-${String(new Date(updateData.paymentDate).getMonth() + 1).padStart(2, '0')}-${new Date(updateData.paymentDate).getFullYear()}`;
     if (updateData.remarks !== undefined) dataToUpdate.remarks = updateData.remarks;
+    if (updateData.referenceNumber !== undefined) dataToUpdate.referenceNumber = updateData.referenceNumber;
+
+    // Capture any spelling of receivedBy
+    const anyReceivedByValue = updateData.receivedBy !== undefined ? updateData.receivedBy
+        : updateData.recievedBy !== undefined ? updateData.recievedBy
+            : updateData.receivedby !== undefined ? updateData.receivedby
+                : updateData.recievedby !== undefined ? updateData.recievedby
+                    : undefined;
+
+    if (anyReceivedByValue !== undefined) dataToUpdate.receivedBy = anyReceivedByValue;
 
     // Handle file update if provided
     if (file) {
@@ -367,7 +422,10 @@ export const getAllThePayments = async (search?: string, supervisorId?: string, 
             ...payment,
             paymentBreakup: parsedBreakup,
             paymentMethod: methodDisplay,
-            paymentDate: displayDate
+            paymentDate: displayDate,
+            recievedBy: payment.receivedBy, // Support frontend typo
+            receivedby: payment.receivedBy,
+            recievedby: payment.receivedBy
         };
     });
 

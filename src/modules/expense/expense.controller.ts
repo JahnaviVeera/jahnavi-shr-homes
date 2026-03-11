@@ -144,6 +144,54 @@ exports.getExpenseById = async (req: Request, res: Response) => {
 };
 
 /**
+ * Proxy endpoint to stream the receipt file with CORS headers.
+ * This is needed for client-side PDF/canvas generation where
+ * the browser enforces CORS on cross-origin image access.
+ * 
+ * GET /api/expense/:expenseId/receipt
+ */
+exports.getReceiptByExpenseId = async (req: Request, res: Response) => {
+    try {
+        const { expenseId } = req.params;
+        const expense = await ExpenseServices.getExpenseById(expenseId);
+
+        if (!expense || !expense.receiptUrl) {
+            return res.status(404).json({
+                success: false,
+                message: "No receipt found for this expense"
+            });
+        }
+
+        // Fetch the file from Supabase public URL
+        const fetchResponse = await fetch(expense.receiptUrl);
+        if (!fetchResponse.ok) {
+            return res.status(502).json({
+                success: false,
+                message: `Failed to fetch receipt from storage: ${fetchResponse.statusText}`
+            });
+        }
+
+        const contentType = fetchResponse.headers.get("content-type") || "application/octet-stream";
+        const buffer = await fetchResponse.arrayBuffer();
+
+        // Set CORS headers explicitly to allow canvas/PDF embedding on any frontend origin
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Length", buffer.byteLength.toString());
+        res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+
+        return res.status(200).send(Buffer.from(buffer));
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
  * @swagger
  * /api/expense:
  *   get:
