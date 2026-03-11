@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 const DocumentServices = require("./documents.services");
 import prisma from "../../config/prisma.client";
 import { sendEmail } from '../../email/emailService';
@@ -34,7 +34,6 @@ interface MulterRequest extends Request {
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "Plans", "Permit", "Others"]
  *                 example: "Agreement"
  *                 description: Type of document
  *               description:
@@ -74,7 +73,7 @@ interface MulterRequest extends Request {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "Plans", "Permit", "Others"]
+ *                           example: "Agreement"
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -192,7 +191,7 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "Plans", "Permit", "Others"]
+ *                           example: "Agreement"
  *                         fileName:
  *                           type: string
  *                         fileType:
@@ -454,7 +453,6 @@ exports.getAllDocuments = async (req: MulterRequest, res: Response) => {
  *                                 description: Name of the document file
  *                               documentType:
  *                                 type: string
- *                                 enum: ["Agreement", "Plans", "Permit", "Others"]
  *                                 example: "Agreement"
  *                                 description: Type of the document
  *                               fileType:
@@ -526,8 +524,7 @@ exports.getDocumentsByProject = async (req: MulterRequest, res: Response) => {
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "Plans", "Permit", "Others"]
- *                 example: "Plans"
+ *                 example: "Building Layout"
  *               description:
  *                 type: string
  *                 maxLength: 500
