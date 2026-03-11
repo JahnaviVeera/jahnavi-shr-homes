@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "npx ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc --outDir dist",
     "start": "node dist/server.js",
     "migration:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate -d src/data-source/typeorm.ts",
