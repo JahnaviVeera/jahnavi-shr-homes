@@ -44,6 +44,10 @@ router.get("/", ExpenseController.getAllExpenses);
 // So Expenses creation is ADMIN ONLY.
 router.post("/", authenticate, authorizeRoles("admin"), upload.single("receipt"), ExpenseController.createExpense);
 
+// Receipt proxy - streams the bill file with CORS headers for canvas/PDF embedding
+// Must come BEFORE /:expenseId to avoid route collision
+router.get("/:expenseId/receipt", authenticate, ExpenseController.getReceiptByExpenseId);
+
 // Get expense by ID
 router.get("/:expenseId", authenticate, authorizeRoles("admin", "supervisor"), ExpenseController.getExpenseById);
 

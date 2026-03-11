@@ -33,6 +33,25 @@ export const createExpense = async (data: {
         throw new Error("Date is required");
     }
 
+    // Validate category items (payment mode reference numbers)
+    if (Array.isArray(data.category)) {
+        data.category.forEach((item: any, index: number) => {
+            if (!item.paymentMode) return;
+            const mode = item.paymentMode.toLowerCase();
+            const refNum = item.referenceNumber;
+
+            if (mode === "cheque") {
+                if (!refNum || !/^\d{6}$/.test(refNum)) {
+                    throw new Error(`Item at index ${index}: 'cheque' paymentMode requires an exactly 6-digit referenceNumber.`);
+                }
+            } else if (mode === "upi" || mode === "bank_transfer") {
+                if (!refNum || !/^\d{12}$/.test(refNum)) {
+                    throw new Error(`Item at index ${index}: '${mode}' paymentMode requires an exactly 12-digit referenceNumber.`);
+                }
+            }
+        });
+    }
+
     // Format date as YYYY-MM-DD string
     const expenseDate = new Date(data.date);
     if (isNaN(expenseDate.getTime())) {
@@ -126,6 +145,7 @@ export const getExpenseById = async (expenseId: string) => {
     return {
         ...expense,
         category: parsedCategory,
+        receiptUrl: expense.receiptUrl || null, // Permanent Supabase public URL - safe for canvas/PDF embedding
         expenseTotal,
         totalProjectExpenses,
         projectExpenses,
