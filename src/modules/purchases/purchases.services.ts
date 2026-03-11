@@ -22,10 +22,10 @@ export const createPurchase = async (
             projectId,
             materialName,
             price,
-            vendorDetails,
-            dateOfPurchase,
-            quantity,
-            unit
+            vendorDetails: vendorDetails ?? null,
+            dateOfPurchase: dateOfPurchase,
+            quantity: quantity ?? null,
+            unit: unit ?? null
         }
     });
 
