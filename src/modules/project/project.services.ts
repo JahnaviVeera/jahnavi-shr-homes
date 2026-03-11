@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus, UserStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
 import { sendEmail } from '../../email/emailService';
@@ -58,6 +58,21 @@ export const createProject = async (data:
     const validStatuses = Object.values(ProjectStatus);
     if (!validStatuses.includes(data.initialStatus as ProjectStatus)) {
         throw new Error(`Invalid initialStatus: "${data.initialStatus}". Valid values are: ${validStatuses.join(', ')}`);
+    }
+
+    // Validate budget
+    if (data.totalBudget < 0) {
+        throw new Error("Total budget must be a non-negative number");
+    }
+
+    // Validate dates
+    const start = new Date(data.startDate);
+    const end = new Date(data.expectedCompletion);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error("Invalid startDate or expectedCompletion");
+    }
+    if (end <= start) {
+        throw new Error("expectedCompletion date must be after the startDate");
     }
 
     // Validate IDs
@@ -401,6 +416,27 @@ export const updateProject = async (projectId: string, updateData: {
             throw new Error(`Invalid status: "${updateData.status}". Valid values are: ${validStatuses.join(', ')}`);
         }
         dataToUpdate.initialStatus = updateData.status as ProjectStatus;
+    }
+
+    // Validate budget
+    if (updateData.totalBudget !== undefined && updateData.totalBudget < 0) {
+        throw new Error("Total budget must be a non-negative number");
+    }
+
+    // Validate dates
+    if (updateData.startDate !== undefined || updateData.expectedCompletion !== undefined) {
+        const currentStartDate = updateData.startDate || project.startDate;
+        const currentExpectedCompletion = updateData.expectedCompletion || project.expectedCompletion;
+
+        const start = new Date(currentStartDate);
+        const end = new Date(currentExpectedCompletion);
+
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            throw new Error("Invalid startDate or expectedCompletion");
+        }
+        if (end <= start) {
+            throw new Error("expectedCompletion date must be after the startDate");
+        }
     }
 
     if (updateData.startDate !== undefined) dataToUpdate.startDate = formatDateString(updateData.startDate);

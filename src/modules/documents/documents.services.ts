@@ -1,5 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
-import { DocumentType } from "@prisma/client";
+import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import * as projectService from "../project/project.services";
 import { notifyUser } from "../notifications/notifications.services";
@@ -40,11 +39,6 @@ export const createDocument = async (
         throw new Error("File is required");
     }
 
-    const validTypes = ["Agreement", "Plans", "Permit", "Others"];
-    if (!validTypes.includes(data.documentType)) {
-        throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
-    }
-
     // Upload to Supabase
     let fileUrl: string;
     let fileId: string;
@@ -62,7 +56,7 @@ export const createDocument = async (
     }
 
     const createData: any = {
-        documentType: data.documentType as DocumentType,
+        documentType: data.documentType,
         description: data.description || null,
         fileData: Buffer.from([]), // Keeping empty buffer for compatibility if field is required
         fileName: file.originalname,
@@ -333,11 +327,7 @@ export const updateDocument = async (
 
     // Update document type if provided
     if (updateData.documentType !== undefined) {
-        const validTypes = ["Agreement", "Plans", "Permit", "Others"];
-        if (!validTypes.includes(updateData.documentType)) {
-            throw new Error(`Invalid document type. Must be one of: ${validTypes.join(", ")}`);
-        }
-        dataToUpdate.documentType = updateData.documentType as DocumentType;
+        dataToUpdate.documentType = updateData.documentType;
     }
 
     // Update description if provided
@@ -455,24 +445,24 @@ export const getDocumentCountsByType = async () => {
         }
     });
 
-    // Initialize all types with 0
+    // Initialize the result object with a total
     const result: any = {
-        Agreement: 0,
-        Plans: 0,
-        Permit: 0,
-        Others: 0,
         total: 0
     };
 
-    // Map the counts to result object
+    // Map the counts dynamically
     counts.forEach((item: any) => {
-        const type = item.documentType;
+        const type = item.documentType || 'Unknown';
         const count = item._count.documentId;
-        if (result.hasOwnProperty(type)) {
-            result[type] = count;
-            result.total += count;
-        }
+        result[type] = count;
+        result.total += count;
     });
+
+    // Ensure common keys exist in case they are queried explicitly
+    if (!result.hasOwnProperty('Agreement')) result['Agreement'] = 0;
+    if (!result.hasOwnProperty('Plans')) result['Plans'] = 0;
+    if (!result.hasOwnProperty('Permit')) result['Permit'] = 0;
+    if (!result.hasOwnProperty('Others')) result['Others'] = 0;
 
     return result;
 };

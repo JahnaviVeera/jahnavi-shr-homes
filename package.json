@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "dev": "npx ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc --outDir dist",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "kill-port": "node src/scripts/kill-port.js",
     "predev": "npm run kill-port",

@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import { ConstructionStage, DailyUpdateStatus, Prisma, UpdateType, ProjectStatus } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
@@ -37,11 +37,14 @@ export const createDailyUpdate = async (
 
     // Validate status if provided
     if (data.status !== undefined) {
-        const validStatuses = ["pending", "approved", "rejected"];
+        const validStatuses = ["draft", "pending", "approved", "rejected"];
         if (!validStatuses.includes(data.status)) {
             throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
         }
     }
+
+    // ... (omitting upload logic for brevity in TargetContent matching)
+    // Actually I should find the create call
 
     // Validate required fields
     if (!data.constructionStage) {
@@ -115,7 +118,7 @@ export const createDailyUpdate = async (
         data.constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
             data.constructionStage as ConstructionStage;
 
-    const statusEnum = data.status as DailyUpdateStatus || DailyUpdateStatus.pending;
+    const statusEnum = (data.status as DailyUpdateStatus) || DailyUpdateStatus.draft;
 
     // No stage-locking: supervisors can upload updates for any stage at any time
 
@@ -134,36 +137,39 @@ export const createDailyUpdate = async (
         }
     });
 
-    // Notify Admins
-    if (projectName) {
-        SocketService.getInstance().emitToRole("admin", "daily_update_created", {
-            message: `New daily update submitted for ${projectName}`,
-            dailyUpdateId: newDailyUpdate.dailyUpdateId
-        });
-        await notifyAdmins(`New daily update submitted for ${projectName}`, "daily_update");
-    } else {
-        SocketService.getInstance().emitToRole("admin", "daily_update_created", {
-            message: `New daily update submitted`,
-            dailyUpdateId: newDailyUpdate.dailyUpdateId
-        });
-        await notifyAdmins(`New daily update submitted`, "daily_update");
-    }
-
-    // Notify Customer
-    if (validProjectId) {
-        const project = await prisma.project.findUnique({
-            where: { projectId: validProjectId },
-            include: { customer: true }
-        });
-
-        if (project && project.customer) {
-            const customerMsg = `New daily update received for project ${project.projectName}`;
-            SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
-                type: "DAILY_UPDATE_RECEIVED",
-                message: customerMsg,
+    // Notify only if NOT a draft
+    if (statusEnum !== DailyUpdateStatus.draft) {
+        // Notify Admins
+        if (projectName) {
+            SocketService.getInstance().emitToRole("admin", "daily_update_created", {
+                message: `New daily update submitted for ${projectName}`,
                 dailyUpdateId: newDailyUpdate.dailyUpdateId
             });
-            await notifyUser(project.customer.userId, customerMsg, "daily_update_received");
+            await notifyAdmins(`New daily update submitted for ${projectName}`, "daily_update");
+        } else {
+            SocketService.getInstance().emitToRole("admin", "daily_update_created", {
+                message: `New daily update submitted`,
+                dailyUpdateId: newDailyUpdate.dailyUpdateId
+            });
+            await notifyAdmins(`New daily update submitted`, "daily_update");
+        }
+
+        // Notify Customer
+        if (validProjectId) {
+            const project = await prisma.project.findUnique({
+                where: { projectId: validProjectId },
+                include: { customer: true }
+            });
+
+            if (project && project.customer) {
+                const customerMsg = `New daily update received for project ${project.projectName}`;
+                SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
+                    type: "DAILY_UPDATE_RECEIVED",
+                    message: customerMsg,
+                    dailyUpdateId: newDailyUpdate.dailyUpdateId
+                });
+                await notifyUser(project.customer.userId, customerMsg, "daily_update_received");
+            }
         }
     }
 
@@ -931,48 +937,206 @@ export const getDailyUpdatesByStatus = async (status: string, supervisorId?: str
 };
 
 /**
- * Approve a daily update (Customer)
- * Validates that the update belongs to a project owned by the user.
+ * Admin approves a daily update
  * @param dailyUpdateId - ID of the update to approve
- * @param userId - ID of the authenticated user
  * @returns The updated daily update record
  */
-export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) => {
+export const adminApproveUpdate = async (dailyUpdateId: string) => {
     // Get Daily Update
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
+        include: { project: true }
     });
 
     if (!dailyUpdate) {
         throw new Error("Daily update not found");
     }
 
-    if (!dailyUpdate.projectId) {
-        throw new Error("Daily update is not linked to any project");
+    const isAdminActionApproved = true;
+
+    // Determine final status
+    let finalStatus: DailyUpdateStatus = DailyUpdateStatus.Approval_Requested;
+    if (dailyUpdate.customerApproved === true) {
+        finalStatus = DailyUpdateStatus.approved;
+    } else if (dailyUpdate.customerApproved === false) {
+        finalStatus = DailyUpdateStatus.rejected;
     }
 
-    // Decoupled Validation: Fetch project via service
-    const project = await projectService.getProjectById(dailyUpdate.projectId);
-
-    // Check if user is the customer of the project
-    const isCustomer = project.customer?.userId === userId;
-
-    if (!isCustomer) {
-        throw new Error("Unauthorized: You can only approve updates for your own projects");
-    }
-
-    const updatedDailyUpdate = await prisma.dailyUpdate.update({
+    const updatedUpdate = await prisma.dailyUpdate.update({
         where: { dailyUpdateId },
         data: {
-            status: DailyUpdateStatus.approved,
+            adminApproved: isAdminActionApproved,
+            status: finalStatus,
             updatedAt: new Date()
         }
     });
 
-    // Update Project Progress
+    // If both approve, update progress
+    if (finalStatus === DailyUpdateStatus.approved && dailyUpdate.projectId) {
+        await updateProjectProgress(dailyUpdate.projectId);
+    }
+
+    // Notifications
+    const project = dailyUpdate.project;
+    if (project) {
+        if (finalStatus === DailyUpdateStatus.approved) {
+            // Notify Supervisor + Customer
+            await notifyApprovalSuccess(dailyUpdateId, project);
+        } else if (dailyUpdate.customerApproved === null) {
+            // Admin approved, but customer still pending
+            await notifyCustomerNudge(dailyUpdateId, project);
+        }
+    }
+
+    return updatedUpdate;
+};
+
+/**
+ * Admin rejects a daily update (Final Rejection)
+ * @param dailyUpdateId - ID of the update to reject
+ * @returns The updated daily update record
+ */
+export const adminRejectUpdate = async (dailyUpdateId: string) => {
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: { project: true }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    const updatedUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            adminApproved: false,
+            status: DailyUpdateStatus.rejected,
+            updatedAt: new Date()
+        }
+    });
+
+    // Notify Supervisor + Customer
+    if (dailyUpdate.project) {
+        await notifyRejectionFinal(dailyUpdateId, dailyUpdate.project, 'Admin');
+    }
+
+    return updatedUpdate;
+};
+
+/**
+ * Customer approves a daily update
+ * @param dailyUpdateId - ID of the update to approve
+ * @param userId - ID of the authenticated user
+ * @param feedback - Optional customer feedback
+ * @returns The updated daily update record
+ */
+export const customerApproveUpdate = async (dailyUpdateId: string, userId: string, feedback?: string) => {
+    // Get Daily Update
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: { project: { include: { customer: true } } }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    if (!dailyUpdate.project) {
+        throw new Error("Daily update is not linked to any project");
+    }
+
+    // Check if user is the customer of the project
+    if (dailyUpdate.project.customerId !== userId) {
+        throw new Error("Unauthorized: You can only approve updates for your own projects");
+    }
+
+    // Determine final status
+    let finalStatus: DailyUpdateStatus = DailyUpdateStatus.Approval_Requested;
+    if (dailyUpdate.adminApproved === true) {
+        finalStatus = DailyUpdateStatus.approved;
+    } else if (dailyUpdate.adminApproved === false) {
+        finalStatus = DailyUpdateStatus.rejected;
+    }
+
+    const updatedUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            customerApproved: true,
+            customerFeedback: feedback || null,
+            status: finalStatus,
+            updatedAt: new Date()
+        }
+    });
+
+    // If both approve, update progress
+    if (finalStatus === DailyUpdateStatus.approved && dailyUpdate.projectId) {
+        await updateProjectProgress(dailyUpdate.projectId);
+    }
+
+    // Notifications
+    const project = dailyUpdate.project;
+    if (finalStatus === DailyUpdateStatus.approved) {
+        await notifyApprovalSuccess(dailyUpdateId, project);
+    } else if (dailyUpdate.adminApproved === null) {
+        // Customer approved, but admin still pending
+        await notifyAdminNudge(dailyUpdateId, project);
+    }
+
+    return updatedUpdate;
+};
+
+/**
+ * Customer rejects a daily update (Final Rejection)
+ * @param dailyUpdateId - ID of the update to reject
+ * @param userId - ID of the authenticated user
+ * @param feedback - Required customer feedback/reason
+ * @returns The updated daily update record
+ */
+export const customerRejectUpdate = async (dailyUpdateId: string, userId: string, feedback: string) => {
+    if (!feedback || feedback.trim() === "") {
+        throw new Error("Feedback is required for rejection");
+    }
+
+    const dailyUpdate = await prisma.dailyUpdate.findUnique({
+        where: { dailyUpdateId },
+        include: { project: { include: { customer: true } } }
+    });
+
+    if (!dailyUpdate) {
+        throw new Error("Daily update not found");
+    }
+
+    if (!dailyUpdate.project) {
+        throw new Error("Daily update is not linked to any project");
+    }
+
+    if (dailyUpdate.project.customerId !== userId) {
+        throw new Error("Unauthorized: You can only reject updates for your own projects");
+    }
+
+    const updatedUpdate = await prisma.dailyUpdate.update({
+        where: { dailyUpdateId },
+        data: {
+            customerApproved: false,
+            customerFeedback: feedback,
+            status: DailyUpdateStatus.rejected,
+            updatedAt: new Date()
+        }
+    });
+
+    // Notify Supervisor + Admin
+    await notifyRejectionFinal(dailyUpdateId, dailyUpdate.project, 'Customer');
+
+    return updatedUpdate;
+};
+
+/**
+ * Helper to update project progress based on unique approved stages
+ */
+const updateProjectProgress = async (projectId: string) => {
     const approvedUpdates = await prisma.dailyUpdate.findMany({
         where: {
-            projectId: dailyUpdate.projectId,
+            projectId: projectId,
             status: DailyUpdateStatus.approved
         },
         select: { constructionStage: true }
@@ -980,114 +1144,104 @@ export const approveDailyUpdate = async (dailyUpdateId: string, userId: string) 
 
     const uniqueStages = new Set(approvedUpdates.map(u => u.constructionStage));
     const totalStages = 6;
-    const newProgress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
+    const progress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
 
     await prisma.project.update({
-        where: { projectId: dailyUpdate.projectId },
-        data: { progress: newProgress }
+        where: { projectId },
+        data: { progress }
     });
+};
+
+/**
+ * Helper: Notify all parties of successfull dual-approval
+ */
+const notifyApprovalSuccess = async (dailyUpdateId: string, project: any) => {
+    const msg = `Daily update for ${project.projectName} has been FULLY APPROVED by both admin and customer.`;
+
+    // Notify Supervisor
+    if (project.supervisorId) {
+        const supervisor = await prisma.supervisor.findUnique({ where: { supervisorId: project.supervisorId } });
+        if (supervisor) {
+            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
+                type: "DAILY_UPDATE_APPROVED",
+                message: msg,
+                dailyUpdateId
+            });
+            await notifyUser(supervisor.userId, msg, "daily_update_approved");
+        }
+    }
+
+    // Notify Customer
+    if (project.customerId) {
+        SocketService.getInstance().emitToUser(project.customerId, "notification", {
+            type: "DAILY_UPDATE_APPROVED",
+            message: msg,
+            dailyUpdateId
+        });
+        await notifyUser(project.customerId, msg, "daily_update_approved");
+    }
 
     // Notify Admins
     SocketService.getInstance().emitToRole("admin", "daily_update_status", {
         status: "APPROVED",
         projectName: project.projectName,
-        dailyUpdateId: dailyUpdate.dailyUpdateId
+        dailyUpdateId
     });
-
-    // Notify Supervisor
-    if (project.supervisorId) {
-        const supervisor = await prisma.supervisor.findUnique({
-            where: { supervisorId: project.supervisorId }
-        });
-        if (supervisor) {
-            SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
-                type: "DAILY_UPDATE_APPROVED",
-                message: `Daily update for ${project.projectName} has been APPROVED by customer`,
-                dailyUpdateId: dailyUpdate.dailyUpdateId
-            });
-            await notifyUser(supervisor.userId, `Daily update for ${project.projectName} has been APPROVED by customer`, "daily_update_approved");
-        }
-    }
-
-    try {
-        const projectName = project.projectName || "Unknown Project";
-        await notifyAdmins(`Daily update for ${projectName} has been APPROVED by the customer`, "daily_update_approval");
-    } catch (error) {
-        console.error("Failed to send notification:", error);
-    }
-
-    return updatedDailyUpdate;
+    await notifyAdmins(msg, "daily_update_approval");
 };
 
 /**
- * Reject a daily update (Customer)
- * Validates that the update belongs to a project owned by the user.
- * @param dailyUpdateId - ID of the update to reject
- * @param userId - ID of the authenticated user
- * @returns The updated daily update record
+ * Helper: Notify supervisors and other party of a rejection
  */
-export const rejectDailyUpdate = async (dailyUpdateId: string, userId: string) => {
-    // Get Daily Update
-    const dailyUpdate = await prisma.dailyUpdate.findUnique({
-        where: { dailyUpdateId },
-    });
+const notifyRejectionFinal = async (dailyUpdateId: string, project: any, rejectedBy: string) => {
+    const msg = `Daily update for ${project.projectName} has been REJECTED by ${rejectedBy}.`;
 
-    if (!dailyUpdate) {
-        throw new Error("Daily update not found");
-    }
-
-    if (!dailyUpdate.projectId) {
-        throw new Error("Daily update is not linked to any project");
-    }
-
-    // Decoupled Validation: Fetch project via service
-    const project = await projectService.getProjectById(dailyUpdate.projectId);
-
-    // Check if user is the customer of the project
-    const isCustomer = project.customer?.userId === userId;
-
-    if (!isCustomer) {
-        throw new Error("Unauthorized: You can only reject updates for your own projects");
-    }
-
-    const updatedDailyUpdate = await prisma.dailyUpdate.update({
-        where: { dailyUpdateId },
-        data: {
-            status: DailyUpdateStatus.rejected,
-            updatedAt: new Date()
-        }
-    });
-
-    // Notify Admins
-    SocketService.getInstance().emitToRole("admin", "daily_update_status", {
-        status: "REJECTED",
-        projectName: project.projectName,
-        dailyUpdateId: dailyUpdate.dailyUpdateId
-    });
-
-    // Notify Supervisor
+    // Supervisor
     if (project.supervisorId) {
-        const supervisor = await prisma.supervisor.findUnique({
-            where: { supervisorId: project.supervisorId }
-        });
+        const supervisor = await prisma.supervisor.findUnique({ where: { supervisorId: project.supervisorId } });
         if (supervisor) {
             SocketService.getInstance().emitToUser(supervisor.userId, "notification", {
                 type: "DAILY_UPDATE_REJECTED",
-                message: `Daily update for ${project.projectName} has been REJECTED by customer`,
-                dailyUpdateId: dailyUpdate.dailyUpdateId
+                message: msg,
+                dailyUpdateId
             });
-            await notifyUser(supervisor.userId, `Daily update for ${project.projectName} has been REJECTED by customer`, "daily_update_rejected");
+            await notifyUser(supervisor.userId, msg, "daily_update_rejected");
         }
     }
 
-    try {
-        const projectName = project.projectName || "Unknown Project";
-        await notifyAdmins(`Daily update for ${projectName} has been REJECTED by the customer`, "daily_update_rejection");
-    } catch (error) {
-        console.error("Failed to send notification:", error);
+    // Notify the other party
+    if (rejectedBy === 'Admin' && project.customerId) {
+        await notifyUser(project.customerId, msg, "daily_update_rejected");
+    } else if (rejectedBy === 'Customer') {
+        await notifyAdmins(msg, "daily_update_rejection");
     }
+};
 
-    return updatedDailyUpdate;
+/**
+ * Helper: Nudge Customer
+ */
+const notifyCustomerNudge = async (dailyUpdateId: string, project: any) => {
+    if (project.customerId) {
+        const msg = `Daily update for ${project.projectName} was approved by Admin and is waiting for your approval.`;
+        await notifyUser(project.customerId, msg, "approval_nudge");
+        SocketService.getInstance().emitToUser(project.customerId, "notification", {
+            type: "DAILY_UPDATE_NUDGE",
+            message: msg,
+            dailyUpdateId
+        });
+    }
+};
+
+/**
+ * Helper: Nudge Admin
+ */
+const notifyAdminNudge = async (dailyUpdateId: string, project: any) => {
+    const msg = `Daily update for ${project.projectName} was approved by Customer and is waiting for Admin approval.`;
+    await notifyAdmins(msg, "approval_nudge");
+    SocketService.getInstance().emitToRole("admin", "daily_update_nudge", {
+        message: msg,
+        dailyUpdateId
+    });
 };
 
 /**
@@ -1217,7 +1371,8 @@ export const getSupervisorStats = async (supervisorId: string) => {
 
 /**
  * Request approval for a daily update (Supervisor only)
- * Changes the status from 'pending' to 'Approval_Requested'.
+ * Changes the status path: draft → Approval_Requested
+ * Resets adminApproved and customerApproved flags.
  * Validates that the update belongs to a project assigned to this supervisor.
  * @param dailyUpdateId - ID of the daily update
  * @param supervisorId - ID of the authenticated supervisor
@@ -1244,128 +1399,55 @@ export const requestApproval = async (dailyUpdateId: string, supervisorId: strin
         throw new Error("Unauthorized: You are not assigned to this project");
     }
 
-    // Allow pending or rejected updates to request approval
-    const allowedStatuses: DailyUpdateStatus[] = [DailyUpdateStatus.pending, DailyUpdateStatus.rejected];
+    // Allow draft (pending) or rejected updates to request approval
+    const allowedStatuses: DailyUpdateStatus[] = [DailyUpdateStatus.pending, DailyUpdateStatus.rejected, DailyUpdateStatus.draft];
     if (!allowedStatuses.includes(dailyUpdate.status)) {
-        throw new Error(`Cannot request approval. Current status is '${dailyUpdate.status}'. Only 'pending' or 'rejected' updates can request approval.`);
+        throw new Error(`Cannot request approval. Current status is '${dailyUpdate.status}'. Only 'draft', 'pending' or 'rejected' updates can request approval.`);
     }
 
-    // Update status to Approval_Requested
+    // Update status to Approval_Requested and reset flags
     const updatedDailyUpdate = await prisma.dailyUpdate.update({
         where: { dailyUpdateId },
         data: {
             status: DailyUpdateStatus.Approval_Requested,
+            adminApproved: null,
+            customerApproved: null,
             updatedAt: new Date(),
         },
     });
 
-    // Notify Admins via socket
+    // Notify Admins and Customer
     SocketService.getInstance().emitToRole("admin", "daily_update_approval_requested", {
         message: `Supervisor requested approval for a daily update on project ${project.projectName}`,
-        dailyUpdateId,
-        projectId: dailyUpdate.projectId,
+        dailyUpdateId
     });
 
-    // Persist admin notification
+    if (project.customerId) {
+        SocketService.getInstance().emitToUser(project.customerId, "notification", {
+            type: "APPROVAL_REQUESTED",
+            message: `Supervisor requested approval for a daily update on project ${project.projectName}`,
+            dailyUpdateId
+        });
+    }
+
     try {
-        await notifyAdmins(
-            `Approval requested for daily update on project "${project.projectName}"`,
-            "approval_requested"
-        );
+        await notifyAdmins(`Approval requested for daily update on project "${project.projectName}"`, "approval_requested");
+        if (project.customerId) {
+            await notifyUser(project.customerId, `Approval requested for daily update on project "${project.projectName}"`, "approval_requested");
+        }
     } catch (e) {
-        console.error("Failed to notify admins for approval request:", e);
+        console.error("Failed to notify parties for approval request:", e);
     }
 
     return updatedDailyUpdate;
 };
 
 /**
- * Add feedback to a daily update (Customer only)
- * @param dailyUpdateId - ID of the daily update
- * @param userId - ID of the customer providing feedback
- * @param feedback - The feedback content
- * @returns The updated daily update record
+ * Add feedback to a daily update (Customer)
+ * In the dual-approval flow, this is treated as a customer approval with feedback.
  */
 export const addFeedback = async (dailyUpdateId: string, userId: string, feedback: string) => {
-    // Check if the update exists
-    const dailyUpdate = await prisma.dailyUpdate.findUnique({
-        where: { dailyUpdateId },
-        include: {
-            project: true
-        }
-    });
-
-    if (!dailyUpdate) {
-        throw new Error("Daily update not found");
-    }
-
-    // Check if the current user is the customer assigned to this project
-    if (dailyUpdate.project && dailyUpdate.project.customerId !== userId) {
-        throw new Error("Unauthorized to add feedback to this daily update");
-    }
-
-    // Update the daily update with feedback AND auto-approve it:
-    // When a customer sends feedback on any update (pending or approval_requested),
-    // the update is automatically approved. No need for supervisor to explicitly
-    // request approval — customer feedback counts as approval.
-    const updatedDailyUpdate = await prisma.dailyUpdate.update({
-        where: { dailyUpdateId },
-        data: {
-            feedback: feedback,
-            status: DailyUpdateStatus.approved,
-            updatedAt: new Date(),
-        },
-        include: {
-            project: {
-                include: {
-                    supervisor: true
-                }
-            }
-        }
-    });
-
-    // Recalculate and update project progress
-    if (updatedDailyUpdate.projectId) {
-        const approvedUpdates = await prisma.dailyUpdate.findMany({
-            where: {
-                projectId: updatedDailyUpdate.projectId,
-                status: DailyUpdateStatus.approved,
-                updateType: 'Customer'
-            },
-            select: { constructionStage: true }
-        });
-
-        const uniqueStages = new Set(approvedUpdates.map(u => u.constructionStage));
-        const totalStages = 6;
-        const newProgress = Math.min(Math.round((uniqueStages.size / totalStages) * 100), 100);
-
-        await prisma.project.update({
-            where: { projectId: updatedDailyUpdate.projectId },
-            data: { progress: newProgress }
-        });
-    }
-
-    // Notify Supervisor via socket
-    if (updatedDailyUpdate.project?.supervisor?.userId) {
-        SocketService.getInstance().emitToUser(
-            updatedDailyUpdate.project.supervisor.userId,
-            "daily_update_feedback_received",
-            {
-                message: `Customer provided feedback and approved a daily update for project ${updatedDailyUpdate.project.projectName}`,
-                dailyUpdateId,
-                projectId: updatedDailyUpdate.projectId,
-            }
-        );
-
-        // Also notify via standard notification
-        await notifyUser(
-            updatedDailyUpdate.project.supervisor.userId,
-            `Customer provided feedback and approved a daily update on project "${updatedDailyUpdate.project.projectName}"`,
-            "feedback_received"
-        );
-    }
-
-    return updatedDailyUpdate;
+    return await customerApproveUpdate(dailyUpdateId, userId, feedback);
 };
 
 /**

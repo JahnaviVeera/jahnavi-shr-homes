@@ -872,7 +872,7 @@ export const getRejectedDailyUpdates = async (req: RequestWithUser, res: Respons
  * @swagger
  * /api/daily-updates/{dailyUpdateId}/approve:
  *   put:
- *     summary: Approve a daily update (Customer)
+ *     summary: Approve a daily update (Admin)
  *     tags: [Daily Updates]
  *     security:
  *       - bearerAuth: []
@@ -887,69 +887,14 @@ export const getRejectedDailyUpdates = async (req: RequestWithUser, res: Respons
  *       200:
  *         description: Daily update approved successfully
  */
-export const approveDailyUpdate = async (req: RequestWithUser, res: Response) => {
+export const adminApproveUpdate = async (req: RequestWithUser, res: Response) => {
     try {
         const dailyUpdateId = req.params.dailyUpdateId as string;
-        const userId = req.user?.userId;
-
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
-        }
-
-        const approvedUpdate = await DailyUpdatesServices.approveDailyUpdate(dailyUpdateId, userId);
-
-        // Email notifications after approve
-        try {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-            const customer = await prisma.user.findUnique({ where: { userId } });
-            const customerName = customer?.userName || 'Customer';
-
-            // Fetch daily update with project + supervisor info
-            const updateWithProject = await prisma.dailyUpdate.findUnique({
-                where: { dailyUpdateId },
-                include: {
-                    project: {
-                        include: {
-                            supervisor: true
-                        }
-                    }
-                }
-            });
-            const projectName = updateWithProject?.project?.projectName || 'Your Project';
-            const constructionStage = String(updateWithProject?.constructionStage || '');
-
-            // Notify Admin
-            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
-            if (admin?.email) {
-                sendEmail({
-                    to: admin.email,
-                    subject: `Daily Update Approved by Customer – ${projectName}`,
-                    html: adminDailyUpdateApprovedEmail({ customerName, projectName, frontendUrl })
-                });
-            }
-
-            // Notify Supervisor
-            const supervisor = updateWithProject?.project?.supervisor;
-            if (supervisor?.email) {
-                const supervisorUserRecord = await prisma.user.findUnique({ where: { userId: supervisor.userId } });
-                sendEmail({
-                    to: supervisor.email,
-                    subject: `Your Daily Update was Approved – ${projectName}`,
-                    html: supervisorDailyUpdateApprovedEmail({
-                        supervisorName: supervisor.fullName || 'Supervisor',
-                        projectName,
-                        customerName,
-                        frontendUrl
-                    })
-                });
-            }
-        } catch (emailErr) {
-            console.error('[Email] Failed to send daily update approved emails:', emailErr);
-        }
+        const approvedUpdate = await DailyUpdatesServices.adminApproveUpdate(dailyUpdateId);
 
         return res.status(200).json({
             success: true,
-            message: "Daily update approved successfully",
+            message: "Daily update approved by Admin successfully",
             data: approvedUpdate,
         });
     } catch (error) {
@@ -964,7 +909,7 @@ export const approveDailyUpdate = async (req: RequestWithUser, res: Response) =>
  * @swagger
  * /api/daily-updates/{dailyUpdateId}/reject:
  *   put:
- *     summary: Reject a daily update (Customer)
+ *     summary: Reject a daily update (Admin)
  *     tags: [Daily Updates]
  *     security:
  *       - bearerAuth: []
@@ -979,66 +924,120 @@ export const approveDailyUpdate = async (req: RequestWithUser, res: Response) =>
  *       200:
  *         description: Daily update rejected successfully
  */
-export const rejectDailyUpdate = async (req: RequestWithUser, res: Response) => {
+export const adminRejectUpdate = async (req: RequestWithUser, res: Response) => {
     try {
         const dailyUpdateId = req.params.dailyUpdateId as string;
-        const userId = req.user?.userId;
-
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "Unauthorized: User ID not found" });
-        }
-
-        const rejectedUpdate = await DailyUpdatesServices.rejectDailyUpdate(dailyUpdateId, userId);
-
-        // Email notifications after reject
-        try {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-            const customer = await prisma.user.findUnique({ where: { userId } });
-            const customerName = customer?.userName || 'Customer';
-            const reason = req.body?.reason;
-
-            const updateWithProject = await prisma.dailyUpdate.findUnique({
-                where: { dailyUpdateId },
-                include: {
-                    project: {
-                        include: { supervisor: true }
-                    }
-                }
-            });
-            const projectName = updateWithProject?.project?.projectName || 'Your Project';
-
-            // Notify Admin
-            const admin = await prisma.user.findFirst({ where: { role: 'admin' } });
-            if (admin?.email) {
-                sendEmail({
-                    to: admin.email,
-                    subject: `Daily Update Rejected by Customer – ${projectName}`,
-                    html: adminDailyUpdateRejectedEmail({ customerName, projectName, reason, frontendUrl })
-                });
-            }
-
-            // Notify Supervisor
-            const supervisor = updateWithProject?.project?.supervisor;
-            if (supervisor?.email) {
-                sendEmail({
-                    to: supervisor.email,
-                    subject: `Your Daily Update was Rejected – ${projectName}`,
-                    html: supervisorDailyUpdateRejectedEmail({
-                        supervisorName: supervisor.fullName || 'Supervisor',
-                        projectName,
-                        customerName,
-                        reason,
-                        frontendUrl
-                    })
-                });
-            }
-        } catch (emailErr) {
-            console.error('[Email] Failed to send daily update rejected emails:', emailErr);
-        }
+        const rejectedUpdate = await DailyUpdatesServices.adminRejectUpdate(dailyUpdateId);
 
         return res.status(200).json({
             success: true,
-            message: "Daily update rejected successfully",
+            message: "Daily update rejected by Admin successfully",
+            data: rejectedUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/customer-approve:
+ *   put:
+ *     summary: Approve a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               feedback:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Daily update approved by Customer successfully
+ */
+export const customerApproveUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+        const { feedback } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const approvedUpdate = await DailyUpdatesServices.customerApproveUpdate(dailyUpdateId, userId, feedback);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update approved by Customer successfully",
+            data: approvedUpdate,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/daily-updates/{dailyUpdateId}/customer-reject:
+ *   put:
+ *     summary: Reject a daily update (Customer)
+ *     tags: [Daily Updates]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: dailyUpdateId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["feedback"]
+ *             properties:
+ *               feedback:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Daily update rejected by Customer successfully
+ */
+export const customerRejectUpdate = async (req: RequestWithUser, res: Response) => {
+    try {
+        const dailyUpdateId = req.params.dailyUpdateId as string;
+        const userId = req.user?.userId;
+        const { feedback } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const rejectedUpdate = await DailyUpdatesServices.customerRejectUpdate(dailyUpdateId, userId, feedback);
+
+        return res.status(200).json({
+            success: true,
+            message: "Daily update rejected by Customer successfully",
             data: rejectedUpdate,
         });
     } catch (error) {

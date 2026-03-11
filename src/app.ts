@@ -73,6 +73,7 @@ app.get("/api-docs-json", (req, res) => {
 // });
 
 app.use("/api/project", projectRoutes)
+app.use("/api/projects", projectRoutes)
 app.use("/api/user", userRoutes)
 app.use("/api/quotations", quotationsRoutes)
 app.use("/api/auth", authRoutes)

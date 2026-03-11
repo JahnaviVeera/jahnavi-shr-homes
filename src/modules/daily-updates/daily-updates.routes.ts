@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const DailyUpdatesController = require("./daily-updates.controller");
 const upload = require("../../config/multer.config").default;
@@ -60,14 +60,16 @@ router.get("/:dailyUpdateId/image", authenticate, authorizeRoles("admin", "super
 // Download daily update video
 router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "supervisor", "customer"), DailyUpdatesController.downloadVideo);
 
-// Request approval for a daily update (Supervisor only) — changes status from pending → Approval_Requested
+// Request approval for a daily update (Supervisor only) — changes status from draft/pending → Approval_Requested
 router.put("/:dailyUpdateId/request-approval", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.requestApprovalForDailyUpdate);
 
-// Approve daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("customer"), DailyUpdatesController.approveDailyUpdate);
+// Admin Approval/Rejection
+router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("admin"), DailyUpdatesController.adminApproveUpdate);
+router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("admin"), DailyUpdatesController.adminRejectUpdate);
 
-// Reject daily update (Authenticated Customer)
-router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("customer"), DailyUpdatesController.rejectDailyUpdate);
+// Customer Approval/Rejection
+router.put("/:dailyUpdateId/customer-approve", authenticate, authorizeRoles("customer"), DailyUpdatesController.customerApproveUpdate);
+router.put("/:dailyUpdateId/customer-reject", authenticate, authorizeRoles("customer"), DailyUpdatesController.customerRejectUpdate);
 
 // Add feedback to daily update (Customer only)
 router.post("/:dailyUpdateId/feedback", authenticate, authorizeRoles("customer"), DailyUpdatesController.addFeedback);

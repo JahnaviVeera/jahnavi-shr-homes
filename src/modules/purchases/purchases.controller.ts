@@ -3,9 +3,17 @@ import * as PurchaseServices from "./purchases.services";
 
 export const createPurchase = async (req: Request, res: Response) => {
     try {
-        const { projectId, materialName, price } = req.body;
+        const { projectId, materialName, price, vendorDetails, dateOfPurchase, quantity, unit } = req.body;
 
-        const newPurchase = await PurchaseServices.createPurchase(projectId, materialName, Number(price));
+        const newPurchase = await PurchaseServices.createPurchase(
+            projectId, 
+            materialName, 
+            Number(price),
+            vendorDetails,
+            dateOfPurchase,
+            quantity !== undefined ? Number(quantity) : undefined,
+            unit
+        );
 
         // The user specifically requested a format like this.
         return res.status(201).json({
