@@ -1,5 +1,14 @@
-import type { Request, Response } from "express";
-const MaterialServices = require("./material.services.ts");
+﻿import type { Request, Response } from "express";
+const MaterialServices = require("./material.services");
+const supervisorService = require("../supervisor/supervisor.services");
+
+interface AuthenticatedRequest extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    };
+}
 
 /**
  * @swagger
@@ -33,6 +42,9 @@ const MaterialServices = require("./material.services.ts");
  *               notes:
  *                 type: string
  *                 example: "For first floor wiring"
+ *               vendor:
+ *                 type: string
+ *                 example: "ABC Supplies"
  *     responses:
  *       201:
  *         description: Material created successfully
@@ -43,9 +55,17 @@ const MaterialServices = require("./material.services.ts");
  *       403:
  *         description: Forbidden - Admin or supervisor privileges required. Customers cannot create materials.
  */
-exports.createMaterial = async (req: Request, res: Response) => {
+exports.createMaterial = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const materialData = await MaterialServices.createMaterial(req.body);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const materialData = await MaterialServices.createMaterial(req.body, supervisorId);
 
         return res.status(201).json({
             success: true,
@@ -79,10 +99,18 @@ exports.createMaterial = async (req: Request, res: Response) => {
  *       400:
  *         description: Bad request - Material not found
  */
-exports.getMaterialById = async (req: Request, res: Response) => {
+exports.getMaterialById = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { materialId } = req.params;
-        const material = await MaterialServices.getMaterialById(materialId);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const material = await MaterialServices.getMaterialById(materialId, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -103,13 +131,28 @@ exports.getMaterialById = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get all materials
  *     tags: [Materials]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by material name, notes, vendor, or project name
  *     responses:
  *       200:
  *         description: Materials fetched successfully
  */
-exports.getAllMaterials = async (req: Request, res: Response) => {
+exports.getAllMaterials = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const materials = await MaterialServices.getAllMaterials();
+        const { search } = req.query;
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to filter visibility
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const materials = await MaterialServices.getAllMaterials(search as string, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -130,6 +173,8 @@ exports.getAllMaterials = async (req: Request, res: Response) => {
  *   get:
  *     summary: Get materials by project ID
  *     tags: [Materials]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: projectId
@@ -141,10 +186,18 @@ exports.getAllMaterials = async (req: Request, res: Response) => {
  *       200:
  *         description: Materials fetched successfully
  */
-exports.getMaterialsByProject = async (req: Request, res: Response) => {
+exports.getMaterialsByProject = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { projectId } = req.params;
-        const materials = await MaterialServices.getMaterialsByProject(projectId);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const materials = await MaterialServices.getMaterialsByProject(projectId, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -159,46 +212,7 @@ exports.getMaterialsByProject = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * @swagger
- * /api/material/total-count:
- *   get:
- *     summary: Get total material count
- *     tags: [Materials]
- *     responses:
- *       200:
- *         description: Total material count fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     totalCount:
- *                       type: integer
- */
-exports.getTotalMaterialCount = async (req: Request, res: Response) => {
-    try {
-        const result = await MaterialServices.getTotalMaterialCount();
 
-        return res.status(200).json({
-            success: true,
-            message: "Total material count fetched successfully",
-            data: result
-        });
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
-    }
-};
 
 /**
  * @swagger
@@ -233,10 +247,18 @@ exports.getTotalMaterialCount = async (req: Request, res: Response) => {
  *                     totalCount:
  *                       type: integer
  */
-exports.getTotalMaterialCountByProject = async (req: Request, res: Response) => {
+exports.getTotalMaterialCountByProject = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { projectId } = req.params;
-        const result = await MaterialServices.getTotalMaterialCountByProject(projectId);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const result = await MaterialServices.getTotalMaterialCountByProject(projectId, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -293,10 +315,18 @@ exports.getTotalMaterialCountByProject = async (req: Request, res: Response) => 
  *       403:
  *         description: Forbidden - Admin or supervisor privileges required. Customers cannot update materials.
  */
-exports.updateMaterial = async (req: Request, res: Response) => {
+exports.updateMaterial = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { materialId } = req.params;
-        const updatedMaterial = await MaterialServices.updateMaterial(materialId, req.body);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const updatedMaterial = await MaterialServices.updateMaterial(materialId, req.body, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -334,10 +364,18 @@ exports.updateMaterial = async (req: Request, res: Response) => {
  *       403:
  *         description: Forbidden - Admin or supervisor privileges required. Customers cannot delete materials.
  */
-exports.deleteMaterial = async (req: Request, res: Response) => {
+exports.deleteMaterial = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { materialId } = req.params;
-        const result = await MaterialServices.deleteMaterial(materialId);
+        let supervisorId: string | undefined = undefined;
+
+        // If user is a supervisor, get their linked supervisorId to verify assignment
+        if (req.user && req.user.role === 'supervisor') {
+            const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+            supervisorId = supervisor.supervisorId;
+        }
+
+        const result = await MaterialServices.deleteMaterial(materialId, supervisorId);
 
         return res.status(200).json({
             success: true,
@@ -352,3 +390,72 @@ exports.deleteMaterial = async (req: Request, res: Response) => {
     }
 };
 
+
+
+/**
+ * @swagger
+ * /api/material/supervisor/materials:
+ *   get:
+ *     summary: Get all materials for projects assigned to the logged-in supervisor
+ *     tags: [Materials]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Materials fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           projectId:
+ *                             type: string
+ *                           projectName:
+ *                             type: string
+ *                           projectType:
+ *                             type: string
+ *                           location:
+ *                             type: string
+ *                           totalMaterials:
+ *                             type: integer
+ *                           materials:
+ *                             type: array 
+ *                             items:
+ *                               $ref: '#/components/schemas/Material'
+ *       403:
+ *         description: Forbidden - Supervisor access required
+ */
+exports.getSupervisorMaterials = async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        // Ensure user is a supervisor
+        if (!req.user || req.user.role !== 'supervisor') {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Supervisor privileges required."
+            });
+        }
+
+        // Get supervisor ID
+        const supervisor = await supervisorService.getSupervisorByUserId(req.user.userId);
+
+        const data = await MaterialServices.getMaterialsBySupervisorId(supervisor.supervisorId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor materials fetched successfully",
+            data: data
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};

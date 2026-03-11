@@ -1,29 +1,19 @@
-import type { Request, Response } from "express";
-const DocumentServices = require("./documents.services.ts");
+﻿import type { Request, Response } from "express";
+const DocumentServices = require("./documents.services");
+import prisma from "../../config/prisma.client";
+import { sendEmail } from '../../email/emailService';
+import { customerDocumentSentEmail } from '../../email/templates/customer/documentSent';
 
 interface MulterRequest extends Request {
-    file?: {
-        buffer: Buffer;
-        originalname: string;
-        mimetype: string;
-    };
-    files?: {
-        [fieldname: string]: Array<{
-            fieldname: string;
-            buffer: Buffer;
-            originalname: string;
-            mimetype: string;
-        }>;
-    } | Array<{
-        fieldname: string;
-        buffer: Buffer;
-        originalname: string;
-        mimetype: string;
-    }>;
     user?: {
+        userId: string;
         email: string;
         role: string;
     };
+    file?: Express.Multer.File;
+    files?: {
+        [fieldname: string]: Express.Multer.File[];
+    } | Express.Multer.File[];
 }
 
 /**
@@ -40,11 +30,11 @@ interface MulterRequest extends Request {
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: ["documentType", "uploadedBy", "file"]
+ *             required: ["documentType", "file"]
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "plans", "permit", "others"]
+ *                 enum: ["Agreement", "Plans", "Permit", "Others"]
  *                 example: "Agreement"
  *                 description: Type of document
  *               description:
@@ -52,16 +42,16 @@ interface MulterRequest extends Request {
  *                 maxLength: 500
  *                 example: "Project agreement document"
  *                 description: Optional description of the document
- *               uploadedBy:
- *                 type: string
- *                 format: uuid
- *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
- *                 description: Admin user ID who uploaded the document
  *               projectId:
  *                 type: string
  *                 format: uuid
  *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
  *                 description: Optional project ID to link document to a project
+ *               userId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                 description: Optional user ID to link document directly to a user
  *               file:
  *                 type: string
  *                 format: binary
@@ -84,16 +74,13 @@ interface MulterRequest extends Request {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "plans", "permit", "others"]
+ *                           enum: ["Agreement", "Plans", "Permit", "Others"]
  *                         fileName:
  *                           type: string
  *                         fileType:
  *                           type: string
  *                         description:
  *                           type: string
- *                         uploadedBy:
- *                           type: string
- *                           format: uuid
  *                         projectId:
  *                           type: string
  *                           format: uuid
@@ -103,6 +90,8 @@ interface MulterRequest extends Request {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // POST - Create Document
 exports.createDocument = async (req: MulterRequest, res: Response) => {
@@ -115,9 +104,9 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             if (Array.isArray(req.files)) {
                 file = req.files.length > 0 ? req.files[0] : undefined;
             } else {
-                file = (req.files['file'] && req.files['file'][0]) || 
-                       (req.files['fileData'] && req.files['fileData'][0]) || 
-                       undefined;
+                file = (req.files['file'] && req.files['file'][0]) ||
+                    (req.files['fileData'] && req.files['fileData'][0]) ||
+                    undefined;
             }
         }
 
@@ -128,7 +117,35 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             });
         }
 
-        const documentData = await DocumentServices.createDocument(req.body, file);
+        const documentData = await DocumentServices.createDocument({
+            ...req.body,
+            userId: req.body.userId || null
+        }, file);
+
+        // Email customer if document is linked to a project
+        try {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+            if (req.body.projectId) {
+                const project = await prisma.project.findUnique({
+                    where: { projectId: req.body.projectId },
+                    include: { customer: true }
+                });
+                if (project?.customer?.email) {
+                    sendEmail({
+                        to: project.customer.email,
+                        subject: `New Document Shared – ShrHomies`,
+                        html: customerDocumentSentEmail({
+                            customerName: project.customer.userName || 'Customer',
+                            documentType: req.body.documentType || 'Document',
+                            projectName: project.projectName,
+                            frontendUrl
+                        })
+                    });
+                }
+            }
+        } catch (emailErr) {
+            console.error('[Email] Failed to send document sent email:', emailErr);
+        }
 
         return res.status(201).json({
             success: true,
@@ -175,16 +192,13 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *                           format: uuid
  *                         documentType:
  *                           type: string
- *                           enum: ["Agreement", "plans", "permit", "others"]
+ *                           enum: ["Agreement", "Plans", "Permit", "Others"]
  *                         fileName:
  *                           type: string
  *                         fileType:
  *                           type: string
  *                         description:
  *                           type: string
- *                         uploadedBy:
- *                           type: string
- *                           format: uuid
  *                         projectId:
  *                           type: string
  *                           format: uuid
@@ -194,12 +208,16 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get Document by ID
-exports.getDocumentById = async (req: Request, res: Response) => {
+exports.getDocumentById = async (req: MulterRequest, res: Response) => {
     try {
         const documentId = req.params.documentId;
-        const document = await DocumentServices.getDocumentById(documentId);
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const document = await DocumentServices.getDocumentById(documentId, userContext);
 
         return res.status(200).json({
             success: true,
@@ -218,21 +236,23 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  * @swagger
  * /api/documents:
  *   get:
- *     summary: Get all documents with optional filters
+ *     summary: Get all documents (Admin/User)
+ *     description: Returns all relevant documents. Admins see all documents in the system. Regular users (Customers) only see documents linked to their projects or directly to their user ID.
  *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
- *       - in: query
- *         name: documentType
- *         schema:
- *           type: string
- *           enum: ["Agreement", "plans", "permit", "others"]
- *         description: Filter by document type
  *       - in: query
  *         name: projectId
  *         schema:
  *           type: string
  *           format: uuid
  *         description: Filter by project ID
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by file name, description, or project name
  *     responses:
  *       200:
  *         description: Documents fetched successfully
@@ -251,17 +271,12 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *                           documentId:
  *                             type: string
  *                             format: uuid
- *                           documentType:
- *                             type: string
  *                           fileName:
  *                             type: string
  *                           fileType:
  *                             type: string
  *                           description:
  *                             type: string
- *                           uploadedBy:
- *                             type: string
- *                             format: uuid
  *                           projectId:
  *                             type: string
  *                             format: uuid
@@ -271,21 +286,29 @@ exports.getDocumentById = async (req: Request, res: Response) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get All Documents
-exports.getAllDocuments = async (req: Request, res: Response) => {
+exports.getAllDocuments = async (req: MulterRequest, res: Response) => {
     try {
         const filters: any = {};
-        
-        if (req.query.documentType) {
-            filters.documentType = req.query.documentType as string;
-        }
-        
+
+
         if (req.query.projectId) {
             filters.projectId = req.query.projectId as string;
         }
 
-        const documents = await DocumentServices.getAllDocuments(Object.keys(filters).length > 0 ? filters : undefined);
+        if (req.query.search) {
+            filters.search = req.query.search as string;
+        }
+
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const documents = await DocumentServices.getAllDocuments(
+            Object.keys(filters).length > 0 ? filters : undefined,
+            userContext
+        );
 
         return res.status(200).json({
             success: true,
@@ -300,66 +323,73 @@ exports.getAllDocuments = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * @swagger
- * /api/documents/type/{documentType}:
- *   get:
- *     summary: Get documents by type
- *     tags: [Documents]
- *     parameters:
- *       - in: path
- *         name: documentType
- *         required: true
- *         schema:
- *           type: string
- *           enum: ["Agreement", "plans", "permit", "others"]
- *         description: Type of document
- *     responses:
- *       200:
- *         description: Documents fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/SuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: array
- *                       items:
- *                         type: object
- *       400:
- *         description: Bad request - Invalid document type
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-// GET - Get Documents by Type
-exports.getDocumentsByType = async (req: Request, res: Response) => {
-    try {
-        const documentType = req.params.documentType;
-        const documents = await DocumentServices.getDocumentsByType(documentType);
+// /**
+//  * @swagger
+//  * /api/documents/type/{documentType}:
+//  *   get:
+//  *     summary: Get documents by type
+//  *     tags: [Documents]
+//  *     parameters:
+//  *       - in: path
+//  *         name: documentType
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *           enum: ["Agreement", "Plans", "Permit", "Others"]
+//  *         description: Type of document
+//  *     responses:
+//  *       200:
+//  *         description: Documents fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               allOf:
+//  *                 - $ref: '#/components/schemas/SuccessResponse'
+//  *                 - type: object
+//  *                   properties:
+//  *                     data:
+//  *                       type: array
+//  *                       items:
+//  *                         type: object
+//  *       400:
+//  *         description: Bad request - Invalid document type
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               $ref: '#/components/schemas/ErrorResponse'
+//  *       403:
+//  *         description: Access denied
+//  */
+// // GET - Get Documents by Type
+// exports.getDocumentsByType = async (req: MulterRequest, res: Response) => {
+//     try {
+//         const documentType = req.params.documentType;
+//         const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
 
-        return res.status(200).json({
-            success: true,
-            message: `Documents of type '${documentType}' fetched successfully`,
-            data: documents,
-        });
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
-    }
-};
+//         const documents = await DocumentServices.getDocumentsByType(documentType, userContext);
+
+//         return res.status(200).json({
+//             success: true,
+//             message: `Documents of type '${documentType}' fetched successfully`,
+//             data: documents,
+//         });
+//     } catch (error) {
+//         return res.status(400).json({
+//             success: false,
+//             message: error instanceof Error ? error.message : String(error),
+//         });
+//     }
+// };
 
 /**
  * @swagger
  * /api/documents/project/{projectId}:
  *   get:
- *     summary: Get documents by project ID
+ *     summary: Get documents by project ID with project details
  *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Returns project details along with all documents for the specified project, including fileName and documentType
  *     parameters:
  *       - in: path
  *         name: projectId
@@ -379,21 +409,83 @@ exports.getDocumentsByType = async (req: Request, res: Response) => {
  *                 - type: object
  *                   properties:
  *                     data:
- *                       type: array
- *                       items:
- *                         type: object
+ *                       type: object
+ *                       properties:
+ *                         project:
+ *                           type: object
+ *                           description: Project details
+ *                           properties:
+ *                             projectId:
+ *                               type: string
+ *                               format: uuid
+ *                               example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *                             projectName:
+ *                               type: string
+ *                               example: "Luxury Villa Project"
+ *                             projectType:
+ *                               type: string
+ *                               enum: ["villa", "apartment", "building"]
+ *                               example: "villa"
+ *                             location:
+ *                               type: string
+ *                               example: "Downtown"
+ *                             totalBudget:
+ *                               type: number
+ *                               format: decimal
+ *                               example: 1000000
+ *                             startDate:
+ *                               type: string
+ *                               format: date
+ *                             expectedCompletion:
+ *                               type: string
+ *                               format: date
+ *                         documents:
+ *                           type: array
+ *                           description: Array of documents with fileName and documentType
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               documentId:
+ *                                 type: string
+ *                                 format: uuid
+ *                               fileName:
+ *                                 type: string
+ *                                 example: "agreement.pdf"
+ *                                 description: Name of the document file
+ *                               documentType:
+ *                                 type: string
+ *                                 enum: ["Agreement", "Plans", "Permit", "Others"]
+ *                                 example: "Agreement"
+ *                                 description: Type of the document
+ *                               fileType:
+ *                                 type: string
+ *                                 example: "application/pdf"
+ *                               description:
+ *                                 type: string
+ *                                 nullable: true
+ *                                 example: "Project agreement document"
+ *                               createdAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               updatedAt:
+ *                                 type: string
+ *                                 format: date-time
  *       400:
- *         description: Bad request
+ *         description: Bad request - Project not found or validation error
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Access denied
  */
 // GET - Get Documents by Project
-exports.getDocumentsByProject = async (req: Request, res: Response) => {
+exports.getDocumentsByProject = async (req: MulterRequest, res: Response) => {
     try {
         const projectId = req.params.projectId;
-        const documents = await DocumentServices.getDocumentsByProject(projectId);
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+
+        const documents = await DocumentServices.getDocumentsByProject(projectId, userContext);
 
         return res.status(200).json({
             success: true,
@@ -434,8 +526,8 @@ exports.getDocumentsByProject = async (req: Request, res: Response) => {
  *             properties:
  *               documentType:
  *                 type: string
- *                 enum: ["Agreement", "plans", "permit", "others"]
- *                 example: "plans"
+ *                 enum: ["Agreement", "Plans", "Permit", "Others"]
+ *                 example: "Plans"
  *               description:
  *                 type: string
  *                 maxLength: 500
@@ -496,9 +588,9 @@ exports.updateDocument = async (req: MulterRequest, res: Response) => {
             if (Array.isArray(req.files)) {
                 file = req.files.length > 0 ? req.files[0] : undefined;
             } else {
-                file = (req.files['file'] && req.files['file'][0]) || 
-                       (req.files['fileData'] && req.files['fileData'][0]) || 
-                       undefined;
+                file = (req.files['file'] && req.files['file'][0]) ||
+                    (req.files['fileData'] && req.files['fileData'][0]) ||
+                    undefined;
             }
         }
 
@@ -616,17 +708,38 @@ exports.deleteDocument = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // GET - Download Document File
-exports.downloadDocument = async (req: Request, res: Response) => {
+exports.downloadDocument = async (req: MulterRequest, res: Response) => {
     try {
         const documentId = req.params.documentId;
+
+        // OPTIONAL: Add access control here if critical. 
+        // Currently `getDocumentFile` does not check role.
+        // It's safer to check first.
+        const userContext = req.user ? { userId: req.user.userId, role: req.user.role } : undefined;
+        // Reuse getDocumentById for permission check before download
+        await DocumentServices.getDocumentById(documentId, userContext);
+
         const documentFile = await DocumentServices.getDocumentFile(documentId);
 
-        // Set headers for file download
-        res.setHeader('Content-Type', documentFile.fileType);
-        res.setHeader('Content-Disposition', `attachment; filename="${documentFile.fileName}"`);
+        // If we have a fileUrl (Supabase), redirect to it or return it
+        if (documentFile.fileUrl) {
+            return res.redirect(documentFile.fileUrl);
+            // Alternatively, return JSON with URL:
+            // return res.status(200).json({ success: true,  data: { fileUrl: documentFile.fileUrl } });
+        }
 
-        // Send file buffer
-        return res.status(200).send(documentFile.fileData);
+        // Fallback for legacy files stored in DB (buffer)
+        if (documentFile.fileData && documentFile.fileData.length > 0) {
+            res.setHeader('Content-Type', documentFile.fileType);
+            res.setHeader('Content-Disposition', `attachment; filename="${documentFile.fileName}"`);
+            return res.status(200).send(documentFile.fileData);
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "File content not found"
+        });
+
     } catch (error) {
         return res.status(400).json({
             success: false,
@@ -634,4 +747,72 @@ exports.downloadDocument = async (req: Request, res: Response) => {
         });
     }
 };
+
+/**
+ * @swagger
+ * /api/documents/counts/by-type:
+ *   get:
+ *     summary: Get total count of documents by type
+ *     tags: [Documents]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Returns the count of documents grouped by type (Agreement, Plans, Permit, Others) and total count
+ *     responses:
+ *       200:
+ *         description: Document counts fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         Agreement:
+ *                           type: integer
+ *                           example: 15
+ *                           description: Count of Agreement documents
+ *                         Plans:
+ *                           type: integer
+ *                           example: 8
+ *                           description: Count of Plans documents
+ *                         Permit:
+ *                           type: integer
+ *                           example: 12
+ *                           description: Count of Permit documents
+ *                         Others:
+ *                           type: integer
+ *                           example: 5
+ *                           description: Count of Others documents
+ *                         total:
+ *                           type: integer
+ *                           example: 40
+ *                           description: Total count of all documents
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+// GET - Get Document Counts by Type
+exports.getDocumentCountsByType = async (req: Request, res: Response) => {
+    try {
+        const counts = await DocumentServices.getDocumentCountsByType();
+
+        return res.status(200).json({
+            success: true,
+            message: "Document counts by type fetched successfully",
+            data: counts,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
 

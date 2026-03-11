@@ -38,3 +38,5 @@ tmp/
 temp/
 *.tmp
 
+
+/src/generated/prisma

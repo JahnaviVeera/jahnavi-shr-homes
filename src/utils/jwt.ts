@@ -1,61 +1,81 @@
-// Ensure dotenv is loaded before accessing environment variables
-const dotenv = require("dotenv");
-dotenv.config({ path: "./src/config/.env" });
+import dotenv from "dotenv";
+import jwt, { SignOptions } from "jsonwebtoken";
 
-const jwt = require("jsonwebtoken");
+// Ensure dotenv is loaded before accessing environment variables
+import path from "path";
+
+// Ensure environment variables are loaded from project root
+dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 interface TokenPayload {
+    userId: string;
     email: string;
     role: string;
 }
 
 /**
  * Generate JWT token for admin
+ * @param userId - Admin user ID
  * @param email - Admin email
  * @returns JWT token string
  */
-exports.generateAdminToken = (email: string): string => {
+export const generateAdminToken = (userId: string, email: string): string => {
     const secret = process.env.JWT_SECRET;
-    
+
     if (!secret) {
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
     const payload: TokenPayload = {
+        userId,
         email,
         role: "admin"
     };
 
-    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
 
-    return jwt.sign(payload, secret, { expiresIn });
+    const signOptions: SignOptions = { expiresIn: expiresIn as any };
+    return jwt.sign(payload, secret, signOptions);
+};
+
+import crypto from "crypto";
+
+/**
+ * Generate Refresh Token (Opaque)
+ * @returns Opaque refresh token string
+ */
+export const generateRefreshToken = (): string => {
+    return crypto.randomBytes(40).toString("hex");
 };
 
 /**
  * Generate JWT token for user or supervisor
+ * @param userId - User or Supervisor ID
  * @param email - User email
  * @param role - User role ("user" or "supervisor")
  * @returns JWT token string
  */
-exports.generateUserToken = (email: string, role: string): string => {
+export const generateUserToken = (userId: string, email: string, role: string): string => {
     const secret = process.env.JWT_SECRET;
-    
+
     if (!secret) {
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
-    if (role !== "user" && role !== "supervisor") {
-        throw new Error("Invalid role. Must be 'user' or 'supervisor'");
+    if (role !== "customer" && role !== "supervisor") {
+        throw new Error("Invalid role. Must be 'customer' or 'supervisor'");
     }
 
     const payload: TokenPayload = {
+        userId,
         email,
         role
     };
 
-    const expiresIn = process.env.JWT_EXPIRY || "24h"; // Default 24 hours
+    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
 
-    return jwt.sign(payload, secret, { expiresIn });
+    const signOptions: SignOptions = { expiresIn: expiresIn as any };
+    return jwt.sign(payload, secret, signOptions);
 };
 
 /**
@@ -63,10 +83,10 @@ exports.generateUserToken = (email: string, role: string): string => {
  * @param token - JWT token string
  * @returns Decoded token payload or null if invalid
  */
-exports.verifyToken = (token: string): TokenPayload | null => {
+export const verifyToken = (token: string): TokenPayload | null => {
     try {
         const secret = process.env.JWT_SECRET;
-        
+
         if (!secret) {
             throw new Error("JWT_SECRET is not defined in environment variables");
         }
@@ -83,7 +103,7 @@ exports.verifyToken = (token: string): TokenPayload | null => {
  * @param authHeader - Authorization header value (e.g., "Bearer <token>")
  * @returns Token string or null
  */
-exports.extractTokenFromHeader = (authHeader: string | undefined): string | null => {
+export const extractTokenFromHeader = (authHeader: string | undefined): string | null => {
     if (!authHeader) {
         return null;
     }
@@ -95,4 +115,3 @@ exports.extractTokenFromHeader = (authHeader: string | undefined): string | null
 
     return parts[1] ?? null;
 };
-

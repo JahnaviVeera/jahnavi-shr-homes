@@ -1,11 +1,14 @@
-import type { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import dotenv from "dotenv";
+import { verifyToken } from "../utils/jwt";
+import prisma from "../config/prisma.client";
+
 // Ensure dotenv is loaded before accessing environment variables
-const dotenv = require("dotenv");
 dotenv.config({ path: "./src/config/.env" });
-const { verifyToken, extractTokenFromHeader } = require("../utils/jwt");
 
 interface AuthRequest extends Request {
     user?: {
+        userId: string;
         email: string;
         role: string;
     };
@@ -19,16 +22,15 @@ interface AuthRequest extends Request {
  * @param next - Express next function
  */
 
-exports.adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminAuthMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // Extract token from Authorization header
-        const authHeader = req.headers.authorization;
-        const token = extractTokenFromHeader(authHeader);
+        // Strictly use accessToken from cookies
+        const token = req.cookies?.accessToken;
 
         if (!token) {
             return res.status(401).json({
                 success: false,
-                message: "Authorization token is required. Please provide a valid Bearer token."
+                message: "Authentication required. Please login."
             });
         }
 
@@ -50,8 +52,21 @@ exports.adminAuthMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
             });
         }
 
+        // Fetch user from database to get userId
+        const user = await prisma.user.findFirst({
+            where: { email: decoded.email }
+        });
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Admin user not found in database."
+            });
+        }
+
         // Attach user info to request object
         req.user = {
+            userId: user.userId,
             email: decoded.email,
             role: decoded.role
         };

@@ -1,20 +1,31 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
-const paymentController = require("./payments.controller.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const paymentController = require("./payments.controller");
+const upload = require("../../config/multer.config").default;
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
+
+/**
+ * @swagger
+ * tags:
+ *   - name: Payments
+ *     description: Payment management endpoints
+ */
 
 // Admin only routes
-router.post("/createpayment", adminAuthMiddleware, paymentController.createPayment);
-router.put("/updatepayment/:paymentId", adminAuthMiddleware, paymentController.updatePayment);
-router.delete("/deletepayment/:paymentId", adminAuthMiddleware, paymentController.deletePayment);
+router.post("/createpayment", authenticate, authorizeRoles("admin"), upload.single("file"), paymentController.createPayment);
+router.put("/updatepayment/:paymentId", authenticate, authorizeRoles("admin"), upload.single("file"), paymentController.updatePayment);
+router.delete("/deletepayment/:paymentId", authenticate, authorizeRoles("admin"), paymentController.deletePayment);
 
-// Public routes (can be accessed by anyone)
-router.get("/getpayment/:paymentId", paymentController.getPaymentById);
-router.get("/getallpayments", paymentController.getAllPayments);
-router.get("/budget-summary", paymentController.getBudgetSummary);
+// Public routes (Restricted to authenticated users)
+router.get("/getpayment/:paymentId", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getPaymentById);
+router.get("/getallpayments", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getAllPayments);
+router.get("/budget-summary", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getBudgetSummary); // Budget summary probably admin only? Or allow supervisor/user? Prompt says "Payments" creation is admin only. Viewing is usually open. Let's start with all authenticated for View, except general summary which might be sensitive.
+// Let's check "Customer will only have view access". So View is OK.
+router.get("/budget-summary/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getBudgetSummaryByProject);
+router.get("/next-receipt-number/:projectId", authenticate, authorizeRoles("admin"), paymentController.getNextReceiptNumber);
 
-module.exports = router;
+export default router;
 
 
 

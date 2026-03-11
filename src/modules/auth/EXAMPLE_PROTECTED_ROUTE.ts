@@ -1,4 +1,4 @@
-/**
+﻿/**
  * EXAMPLE: How to protect routes with admin authentication
  * 
  * This file shows examples of protecting routes with admin middleware.
@@ -7,7 +7,7 @@
 
 const express = require("express");
 const router = express.Router();
-const adminAuthMiddleware = require("../../middleware/adminAuth.middleware.ts");
+const adminAuthMiddleware = require("../../middleware/adminAuth.middleware");
 
 // ============================================
 // EXAMPLE 1: Protect a single route
@@ -61,4 +61,5 @@ exports.yourProtectedMethod = async (req: any, res: Response) => {
 */
 
 module.exports = router;
+
 

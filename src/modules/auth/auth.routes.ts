@@ -1,21 +1,32 @@
-const express = require("express");
+﻿import express from "express";
+import * as authController from "./auth.controller";
+import { authenticate, authorizeRoles } from "../../middleware/auth.middleware";
+
 const router = express.Router();
-const authController = require("./auth.controller.ts");
 
 /**
  * @swagger
  * tags:
- *   - name: Authentication
- *     description: Admin authentication endpoints
+ *   name: Authentication
+ *   description: Authentication endpoints for Admin, User, and Supervisor
  */
 
-// Admin login route
+
 router.post("/admin/login", authController.adminLogin);
 
-// User login route (for regular users only)
+router.post("/admin/signup", authController.adminSignup);
+
+// router.delete("/admin/clear-database", authenticate, authorizeRoles("admin"), authController.clearDatabase);
+
+
 router.post("/user/login", authController.userLogin);
 
-// Supervisor login route (for supervisors only)
+
 router.post("/supervisor/login", authController.supervisorLogin);
 
-module.exports = router;
+router.post("/refresh", authController.refreshAccessToken);
+
+router.post("/logout", authenticate, authController.logout);
+
+
+export default router;

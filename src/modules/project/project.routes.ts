@@ -1,16 +1,23 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
-const projectController = require("./project.controller.ts");
-const { adminAuthMiddleware } = require("../../middleware/adminAuth.middleware.ts");
+const projectController = require("./project.controller");
+const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
 
-// Admin only routes
-router.post("/createproject", adminAuthMiddleware, projectController.createProject);
-router.put("/updateproject/:projectId", adminAuthMiddleware, projectController.updateProject);
-router.delete("/deleteproject/:projectId", adminAuthMiddleware, projectController.deleteProject);
+/**
+ * @swagger
+ * tags:
+ *   name: Projects
+ *   description: Project management endpoints
+ */
 
-// Public routes (can be accessed by anyone)
-router.get("/getproject/:projectId", projectController.getProjectById);
-router.get("/getallprojects", projectController.getAllProjects);
+router.post("/createproject", authenticate, authorizeRoles("admin"), projectController.createProject);
+router.put("/updateproject/:projectId", authenticate, authorizeRoles("admin"), projectController.updateProject);
+router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin"), projectController.deleteProject);
+router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getProjectById);
+router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
+router.get("/recent-active", authenticate, authorizeRoles("admin"), projectController.getRecentActiveProjects);
+router.get("/project-summary", authenticate, authorizeRoles("customer"), projectController.getProjectSummary);
 
-module.exports = router;
+export default router;
+

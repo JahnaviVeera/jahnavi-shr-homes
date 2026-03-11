@@ -1,0 +1,62 @@
+[dotenv@17.2.3] injecting env (10) from src\config\.env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma\schema.prisma.
+Datasource "db": PostgreSQL database "railway", schema "public" at "caboose.proxy.rlwy.net:58514"
+
+Drift detected: Your database schema is not in sync with your migration history.
+
+The following is a summary of the differences between the expected database schema given your migrations files, and the actual schema of the database.
+
+It should be understood as the set of changes to get from the expected schema to the actual schema.
+
+[+] Added enums
+  - materials_unit_enum
+  - update_type_enum
+
+[+] Added tables
+  - email_logs
+
+[*] Changed the `currencies_enum` enum
+  [+] Added variant `INR (₹)`
+
+[*] Changed the `documents_documenttype_enum` enum
+  [+] Added variant `Others`
+  [-] Removed variant `Other`
+
+[*] Changed the `projects_initialstatus_enum` enum
+  [-] Removed variant `Planning`
+  [-] Removed variant `complete`
+
+[*] Changed the `users_status_enum` enum
+  [+] Added variant `pending`
+  [+] Added variant `inprogress`
+  [+] Added variant `completed`
+  [-] Removed variant `Active`
+  [-] Removed variant `Inactive`
+
+[*] Changed the `daily_updates` table
+  [+] Added column `labourWorkers`
+  [+] Added column `quantityConsumption`
+  [+] Added column `updateType`
+
+[*] Changed the `documents` table
+  [+] Added column `file_size`
+
+[*] Changed the `expenses` table
+  [*] Column `category` would be dropped and recreated (default changed from `None` to `Some(Value(String("[]")))`, type changed)
+
+[*] Changed the `materials` table
+  [+] Added column `units`
+
+[*] Changed the `users` table
+  [+] Added column `description`
+  [+] Added column `location`
+  [+] Added column `requirements`
+  [*] Altered column `currency` (default changed from `Some(Value(Enum("USD ($)")))` to `Some(Value(Enum("INR (₹)")))`)
+  [*] Altered column `status` (default changed from `Some(Value(Enum("Active")))` to `Some(Value(Enum("pending")))`)
+
+We need to reset the "public" schema at "caboose.proxy.rlwy.net:58514"
+
+You may use prisma migrate reset to drop the development database.
+All data will be lost.

@@ -1,5 +1,8 @@
-import type { Request, Response } from "express";
-const UserServices = require("./user.services.ts");
+﻿import type { Request, Response, NextFunction } from "express";
+const UserServices = require("./user.services");
+import { sendEmail } from '../../email/emailService';
+import { passwordChangedEmail } from '../../email/templates/shared/passwordChanged';
+import prisma from '../../config/prisma.client';
 
 /**
  * @swagger
@@ -37,10 +40,34 @@ const UserServices = require("./user.services.ts");
  *         description: Unauthorized - Admin authentication required
  *       403:
  *         description: Forbidden - Admin privileges required
+ *     # Example Payload:
+ *     # {
+ *     #   "userName": "Ramesh Kumar",
+ *     #   "phone": "9876543210", 
+ *     #   "email": "ramesh@email.com",
+ *     #   "location": "Plot 12, Banjara Hills, Hyderabad",
+ *     #   "requirements": "3BHK villa, 2400 sq ft, ground floor only",
+ *     #   "description": "Additional project details, budget range...",
+ *     #   "notes": "Internal notes..."
+ *     # }
  */
 //POST
-exports.createUser = async (req: Request, res: Response) => {
+exports.createUser = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        if (!req.body || Object.keys(req.body).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Request body is empty or improperly formatted. Ensure Content-Type is application/json."
+            });
+        }
+
+        if (!req.body.email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required"
+            });
+        }
+
         const userData = await UserServices.createUser(req.body);
 
         return res.status(201).json({
@@ -49,10 +76,7 @@ exports.createUser = async (req: Request, res: Response) => {
             data: userData,
         });
     } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : String(error),
-        });
+        next(error);
     }
 };
 
@@ -90,22 +114,19 @@ exports.createUser = async (req: Request, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETBYID
-exports.getuserById = async(req:Request,res:Response)=>{
-   try{
-          const userId = req.params.userId
-          const user = await UserServices.getUserById(userId);
+exports.getuserById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.params.userId
+        const user = await UserServices.getUserById(userId);
 
-          return res.status(200).json({
-                success:true,
-                message: "User fetched successfully",
-                data:user
-          })
-   }catch(error){
-       return res.status(400).json({
-        success:false,
-        message:error instanceof Error ? error.message : String(error),
-       })
-   }
+        return res.status(200).json({
+            success: true,
+            message: "User fetched successfully",
+            data: user
+        })
+    } catch (error) {
+        next(error);
+    }
 
 }
 
@@ -115,6 +136,12 @@ exports.getuserById = async(req:Request,res:Response)=>{
  *   get:
  *     summary: Get all users
  *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by user name, email, or company name
  *     responses:
  *       200:
  *         description: Users fetched successfully
@@ -137,20 +164,18 @@ exports.getuserById = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //GETALL
-exports.getAllUsers = async(req:Request,res:Response)=>{
-    try{
-        const users = await UserServices.getAllUsers();
-       return res.status(200).json({
-        success:true,
-        message: "Users feched successfully",
-        data:users
-       })
-
-    }catch(error){
-        return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+exports.getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const search = req.query.search as string;
+        const users = await UserServices.getAllUsers(search);
+        return res.status(200).json({
+            success: true,
+            message: "Users fetched successfully",
+            data: users
         })
+
+    } catch (error) {
+        next(error);
     }
 }
 
@@ -174,34 +199,74 @@ exports.getAllUsers = async(req:Request,res:Response)=>{
  *       required: true
  *       content:
  *         application/json:
-     *           schema:
-     *             type: object
-     *             properties:
-     *               userName:
-     *                 type: string
-     *                 maxLength: 255
-     *                 example: "John Doe"
-     *               role:
-     *                 type: string
-     *                 enum: ["admin", "user", "supervisor"]
-     *                 example: "user"
-     *               email:
-     *                 type: string
-     *                 format: email
-     *                 example: "john.doe@example.com"
-     *               contact:
-     *                 type: string
-     *                 maxLength: 15
-     *                 example: "9876543210"
-     *               estimatedInvestment:
-     *                 type: number
-     *                 format: decimal
-     *                 example: 50000.00
-     *                 description: Estimated investment amount (optional)
-     *               notes:
-     *                 type: string
-     *                 example: "Additional notes about the user"
-     *                 description: Notes about the user (optional)
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userName:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "John Doe"
+ *               role:
+ *                 type: string
+ *                 enum: ["admin", "customer", "supervisor"]
+ *                 example: "customer"
+ *               password:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "NewPassword123!"
+ *                 description: Password (will be hashed automatically)
+ *               status:
+ *                 type: string
+ *                 enum: ["Active", "Inactive"]
+ *                 example: "Active"
+ *               estimatedInvestment:
+ *                 type: number
+ *                 format: decimal
+ *                 example: 50000.00
+ *                 description: Estimated investment amount (optional)
+ *               notes:
+ *                 type: string
+ *                 example: "Additional notes about the user"
+ *                 description: Notes about the user (optional)
+ *               companyName:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "ABC Construction Ltd"
+ *                 description: Company name (optional)
+ *               location:
+ *                 type: string
+ *                 maxLength: 255
+ *                 example: "Plot 12, Banjara Hills, Hyderabad"
+ *                 description: Location of site (optional)
+ *               requirements:
+ *                 type: string
+ *                 example: "3BHK villa, 2400 sq ft"
+ *                 description: Project requirements (optional)
+ *               description:
+ *                 type: string
+ *                 example: "Additional project details"
+ *                 description: Additional project details (optional)
+
+ *
+ *               timezone:
+ *                 type: string
+ *                 maxLength: 100
+ *                 example: "Asia/Kolkata"
+ *                 description: User timezone preference (optional)
+ *               currency:
+ *                 type: string
+ *                 maxLength: 20
+ *                 example: "INR"
+ *                 description: User currency preference (optional)
+ *               language:
+ *                 type: string
+ *                 maxLength: 50
+ *                 example: "English"
+ *                 description: User language preference (optional)
+ *               address:
+ *                 type: string
+ *                 example: "123 Main St, New York, NY 10001"
+ *                 description: User address (optional)
  *     responses:
  *       200:
  *         description: User updated successfully
@@ -226,21 +291,24 @@ exports.getAllUsers = async(req:Request,res:Response)=>{
  *         description: Forbidden - Admin privileges required
  */
 //PUT
-exports.updateUser = async(req:Request, res:Response)=>{
-    try{
+exports.updateUser = async (req: Request, res: Response) => {
+    try {
         const userId = req.params.userId;
 
-        const updatedUserData = await UserServices.updateUser(userId, req.body);
+        // Prevent updating email and contact/phone number via this endpoint
+        const { email, contact, phoneNumber, ...allowedUpdates } = req.body;
+
+        const updatedUserData = await UserServices.updateUser(userId, allowedUpdates);
 
         return res.status(200).json({
-             success:true,
-             message:"User updated successfully",
-             data:updatedUserData
+            success: true,
+            message: "User updated successfully",
+            data: updatedUserData
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -285,21 +353,21 @@ exports.updateUser = async(req:Request, res:Response)=>{
  *         description: Forbidden - Admin privileges required
  */
 //DELETE
-exports.deleteUser = async(req:Request,res:Response)=>{
-    try{
+exports.deleteUser = async (req: Request, res: Response) => {
+    try {
         const userId = req.params.userId;
 
         const deletedUserData = await UserServices.deleteUser(userId);
 
         return res.status(200).json({
-            success:true,
-            message:"User deleted successfully",
-            data:deletedUserData
+            success: true,
+            message: "User deleted successfully",
+            data: deletedUserData
         })
-    }catch(error){
+    } catch (error) {
         return res.status(404).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -549,6 +617,949 @@ exports.getUsersWithoutSupervisor = async (req: Request, res: Response) => {
             success: true,
             message: "Users without supervisor fetched successfully",
             data: users
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/{userId}/approve-supervisor:
+ *   post:
+ *     summary: Approve supervisor for a user (Customer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID (must match authenticated customer's ID)
+ *     responses:
+ *       200:
+ *         description: Supervisor approved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *       400:
+ *         description: Bad request - User not found or supervisor not assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ *       403:
+ *         description: Forbidden - Customer can only approve their own supervisor
+ */
+exports.approveSupervisor = async (req: Request, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const authReq = req as any; // Type assertion for AuthRequest
+
+        // Ensure customer can only approve their own supervisor
+        if (authReq.user && authReq.user.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only approve your own supervisor."
+            });
+        }
+
+        const supervisor = await UserServices.approveSupervisor(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor approved successfully",
+            data: supervisor
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/{userId}/reject-supervisor:
+ *   post:
+ *     summary: Reject supervisor for a user (Customer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID (must match authenticated customer's ID)
+ *     responses:
+ *       200:
+ *         description: Supervisor rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *       400:
+ *         description: Bad request - User not found or supervisor not assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ *       403:
+ *         description: Forbidden - Customer can only reject their own supervisor
+ */
+exports.rejectSupervisor = async (req: Request, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const authReq = req as any; // Type assertion for AuthRequest
+
+        // Ensure customer can only reject their own supervisor
+        if (authReq.user && authReq.user.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only reject your own supervisor."
+            });
+        }
+
+        const supervisor = await UserServices.rejectSupervisor(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Supervisor rejected successfully",
+            data: supervisor
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+interface AuthRequest extends Request {
+    user?: {
+        userId: string;
+        email: string;
+        role: string;
+    };
+}
+
+/**
+ * @swagger
+ * /api/user/admin/account-settings:
+ *   get:
+ *     summary: Get admin account settings (email, company, contact)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin account settings fetched successfully
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getAdminAccountSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin account settings fetched successfully",
+            data: {
+                email: user.email,
+                userName: user.userName,
+                companyName: user.companyName,
+                contact: user.contact
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/account-settings:
+ *   put:
+ *     summary: Update admin account settings (email, company, contact)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "admin@example.com"
+ *               userName:
+ *                 type: string
+ *                 example: "Admin User"
+ *               companyName:
+ *                 type: string
+ *                 example: "SHR Homes"
+ *               contact:
+ *                 type: string
+ *                 example: "1234567890"
+ *     responses:
+ *       200:
+ *         description: Admin account settings updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+exports.updateAdminAccountSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Only allow updating account-related fields
+        const { email, userName, companyName, contact } = req.body;
+        const updateData: any = {};
+
+        if (email !== undefined) updateData.email = email;
+        if (userName !== undefined) updateData.userName = userName;
+        if (companyName !== undefined) updateData.companyName = companyName;
+        if (contact !== undefined) updateData.contact = contact;
+
+        const updatedUser = await UserServices.updateUser(userId, updateData);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin account settings updated successfully",
+            data: {
+                email: updatedUser.email,
+                userName: updatedUser.userName,
+                companyName: updatedUser.companyName,
+                contact: updatedUser.contact
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/general-settings:
+ *   get:
+ *     summary: Get admin general settings (timezone, currency, language)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin general settings fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     timezone:
+ *                       type: string
+ *                       example: "UTC"
+ *                     currency:
+ *                       type: string
+ *                       example: "USD"
+ *                     language:
+ *                       type: string
+ *                       example: "English"
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getAdminGeneralSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin general settings fetched successfully",
+            data: {
+                timezone: user.timezone,
+                currency: user.currency,
+                language: user.language
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/general-settings:
+ *   put:
+ *     summary: Update admin general settings (timezone, currency, language)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               timezone:
+ *                 type: string
+ *                 enum: ["Eastern Time (ET)", "Central Time (CT)", "Mountain Time (MT)", "Pacific Time (PT)", "UTC"]
+ *                 example: "Eastern Time (ET)"
+ *                 description: "Timezone preference for the admin"
+ *               currency:
+ *                 type: string
+ *                 enum: ["USD ($)", "EUR (€)", "GBP (£)"]
+ *                 example: "USD ($)"
+ *                 description: "Currency preference for the admin"
+ *               language:
+ *                 type: string
+ *                 enum: ["English", "Spanish", "French"]
+ *                 example: "English"
+ *                 description: "Language preference for the admin"
+ *     responses:
+ *       200:
+ *         description: Admin general settings updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+exports.updateAdminGeneralSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Only allow updating general settings fields
+        const { timezone, currency, language } = req.body;
+        const updateData: any = {};
+
+        if (timezone !== undefined) updateData.timezone = timezone;
+        if (currency !== undefined) updateData.currency = currency;
+        if (language !== undefined) updateData.language = language;
+
+        const updatedUser = await UserServices.updateUser(userId, updateData);
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin general settings updated successfully",
+            data: {
+                timezone: updatedUser.timezone,
+                currency: updatedUser.currency,
+                language: updatedUser.language
+            }
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/change-password:
+ *   post:
+ *     summary: Change admin password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *               confirmNewPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ */
+exports.changeAdminPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({ success: false, message: "New passwords do not match" });
+        }
+
+        const result = await UserServices.changePassword(userId, currentPassword, newPassword);
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile:
+ *   get:
+ *     summary: Get own profile and project summary
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Profile fetched successfully
+ */
+exports.getProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const user = await UserServices.getUserById(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile fetched successfully",
+            data: user
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile:
+ *   put:
+ *     summary: Update own profile
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userName:
+ *                 type: string
+ *               contact:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               companyName:
+ *                 type: string
+ *               notes:
+ *                 type: string
+ *               estimatedInvestment:
+ *                 type: number
+ *                 format: decimal
+ *                 description: Estimated investment amount
+ *               timezone:
+ *                 type: string
+ *                 description: Timezone preference
+ *               currency:
+ *                 type: string
+ *                 description: Currency preference
+ *               language:
+ *                 type: string
+ *                 description: Language preference
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ */
+exports.updateUserProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Filter allowed fields to update
+        const { userName, contact, companyName, notes, address } = req.body;
+        const dataToUpdate = {
+            userName,
+            contact,
+            companyName,
+            notes,
+            address
+        };
+
+        const updatedUser = await UserServices.updateUser(userId, dataToUpdate);
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            data: updatedUser
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/profile/change-password:
+ *   post:
+ *     summary: Change own password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *               confirmNewPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ */
+exports.changeUserPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const { currentPassword, newPassword, confirmNewPassword, contact, phoneNumber, userName } = req.body;
+        let userId = req.body.userId; // Allow specific userId from body
+
+        if (!userId) {
+            userId = req.user?.userId;
+        }
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized: User ID required" });
+        }
+
+        // 1. Handle Password Change if requested
+        let passwordWasChanged = false;
+        if (newPassword && newPassword.trim() !== "") {
+            if (newPassword !== confirmNewPassword) {
+                return res.status(400).json({ success: false, message: "New passwords do not match" });
+            }
+            if (!currentPassword) {
+                return res.status(400).json({ success: false, message: "Current password is required to change password" });
+            }
+            // This service method checks current password and updates to new
+            await UserServices.changePassword(userId, currentPassword, newPassword);
+            passwordWasChanged = true;
+        }
+
+        // 2. Handle Profile Update (Phone/Name)
+        const updateData: any = {};
+        // Map 'phoneNumber' from request to 'contact' in DB if present
+        if (contact) updateData.contact = contact;
+        if (phoneNumber) updateData.contact = phoneNumber;
+        if (userName) updateData.userName = userName;
+
+        if (Object.keys(updateData).length > 0) {
+            await UserServices.updateUser(userId, updateData);
+        }
+
+        // 3. Send password changed email (if password was actually changed)
+        if (passwordWasChanged) {
+            try {
+                const user = await prisma.user.findUnique({ where: { userId } });
+                if (user?.email) {
+                    sendEmail({
+                        to: user.email,
+                        subject: 'Password Changed – ShrHomies',
+                        html: passwordChangedEmail({ name: user.userName || 'User' })
+                    });
+                }
+            } catch (emailErr) {
+                console.error('[Email] Failed to send password changed email:', emailErr);
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile and/or password updated successfully",
+            data: {}
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+// Analytics methods moved to UserServices
+
+// ... existing code ...
+
+/**
+ * @swagger
+ * /api/user/leads/stats:
+ *   get:
+ *     summary: Get customer leads and closed customers stats
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Stats fetched successfully
+ */
+exports.getCustomerLeadsStats = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const stats = await UserServices.getCustomerLeadsStats();
+        return res.status(200).json({
+            success: true,
+            message: "Customer leads stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/leads/new:
+ *   get:
+ *     summary: Get list of new leads (Users with pending status)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: New leads fetched successfully
+ */
+exports.getNewLeads = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const leads = await UserServices.getNewLeadsList();
+        return res.status(200).json({
+            success: true,
+            message: "New leads fetched successfully",
+            data: leads
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/leads/closed:
+ *   get:
+ *     summary: Get list of closed customers (Users with inprogress or completed status)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Closed customers fetched successfully
+ */
+exports.getClosedCustomers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const customers = await UserServices.getClosedCustomersList();
+        return res.status(200).json({
+            success: true,
+            message: "Closed customers fetched successfully",
+            data: customers
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/dashboard-stats:
+ *   get:
+ *     summary: Get dashboard statistics for the logged-in customer
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard stats fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     projectProgress:
+ *                       type: integer
+ *                       description: Percentage completion of the latest project
+ *                     pendingApprovals:
+ *                       type: integer
+ *                       description: Count of pending items (daily updates + quotations)
+ *                     paidAmount:
+ *                       type: number
+ *                       description: Total verified paid amount
+ *                     pendingAmount:
+ *                       type: number
+ *                       description: Outstanding balance (Total Budget - Paid)
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ */
+exports.getDashboardStats = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const stats = await UserServices.getCustomerDashboardStats(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Dashboard stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/admin/dashboard-stats:
+ *   get:
+ *     summary: Get dashboard statistics for admin
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admin dashboard stats fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     totalProjects:
+ *                       type: integer
+ *                       description: Total count of projects
+ *                     activeSupervisors:
+ *                       type: integer
+ *                       description: Count of active supervisors
+ *                     pendingApprovals:
+ *                       type: integer
+ *                       description: Total pending approvals (quotations + daily updates)
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+exports.getAdminDashboardStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await UserServices.getAdminDashboardStats();
+
+        return res.status(200).json({
+            success: true,
+            message: "Admin dashboard stats fetched successfully",
+            data: stats
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
+
+/**
+ * @swagger
+ * /api/user/{userId}/change-password:
+ *   post:
+ *     summary: Change customer password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: ["currentPassword", "newPassword", "confirmNewPassword"]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "OldPassword123"
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *               confirmNewPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: "NewPassword123"
+ *     responses:
+ *       200:
+ *         description: Password updated successfully
+ *       400:
+ *         description: Bad request - Validation error or incorrect password
+ *       401:
+ *         description: Unauthorized - Customer authentication required
+ */
+exports.changeCustomerPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const { userId } = req.params;
+        const loggedInUser = req.user;
+
+        if (!loggedInUser) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        // Logic check: User can only change their OWN password. Admin can change ANY.
+        if (loggedInUser.role !== 'admin' && loggedInUser.userId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You can only change your own password"
+            });
+        }
+
+        // Safety check: ensure req.body exists
+        if (!req.body) {
+            console.error(`[ChangeCustomerPassword] req.body is undefined. Content-Type: ${req.headers['content-type']}`);
+            return res.status(400).json({
+                success: false,
+                message: "Request body is missing. Please ensure you are sending JSON data with 'Content-Type: application/json' header."
+            });
+        }
+
+        const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+        // Validate required fields
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Current password, new password, and confirm password are required"
+            });
+        }
+
+        // Validate new passwords match
+        if (newPassword !== confirmNewPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "New password and confirm password do not match"
+            });
+        }
+
+        // Change password
+        const result = await UserServices.changeCustomerPassword(
+            userId,
+            currentPassword,
+            newPassword
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+            data: {}
         });
     } catch (error) {
         return res.status(400).json({

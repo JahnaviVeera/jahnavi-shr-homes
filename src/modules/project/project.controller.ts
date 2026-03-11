@@ -1,5 +1,6 @@
-import type { Request,Response} from "express";
-const ProjectServices = require("./project.services.ts");
+﻿import type { Request, Response } from "express";
+const ProjectServices = require("./project.services");
+
 
 /**
  * @swagger
@@ -33,30 +34,55 @@ const ProjectServices = require("./project.services.ts");
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *     x-codeSamples:
+ *       - lang: JSON
+ *         label: Payload
+ *         source: |
+ *           {
+ *             "projectName": "Sunrise Villa",
+ *             "projectType": "villa",
+ *             "location": "City, State",
+ *             "initialStatus": "Inprogress",
+ *             "startDate": "2024-01-01",
+ *             "expectedCompletion": "2024-12-31",
+ *             "totalBudget": 5000000,
+ *             "materialName": "Concrete",
+ *             "quantity": 100,
+ *             "customerId": "uuid",
+ *             "supervisorId": "uuid",
+ *             "projectManager": "John Doe",
+ *             "area": "1500 Sqft",
+ *             "numberOfFloors": 2,
+ *             "priority": "Medium",
+ *             "currency": "INR",
+ *             "description": "Project details...",
+ *             "progress": 0
+ *           }
  */
 
 
 //post
-exports.createProject = async(req: Request,res: Response)=>{
-    try{
+exports.createProject = async (req: Request, res: Response) => {
+    try {
 
         const projectData = await ProjectServices.createProject(req.body);
 
         return res.status(201).json({
-            success:true,
-            message:"Project created successfully",
-            data:projectData,
+            success: true,
+            message: "Project created successfully",
+            data: projectData,
         });
 
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
-            
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+
         });
     }
 
 }
+
 
 /**
  * @swagger
@@ -92,20 +118,20 @@ exports.createProject = async(req: Request,res: Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //getId
-exports.getProjectById = async(req:Request,res:Response)=>{
-    try{
+exports.getProjectById = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
         const project = await ProjectServices.getProjectByProjectId(projectId);
 
         return res.status(200).json({
-            success:true,
-            message:"Project fetched successfully",
-            data:project,
+            success: true,
+            message: "Project fetched successfully",
+            data: project,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -117,6 +143,24 @@ exports.getProjectById = async(req:Request,res:Response)=>{
  *   get:
  *     summary: Get all projects
  *     tags: [Projects]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by project name, location, material, or notes
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         description: Number of items per page
  *     responses:
  *       200:
  *         description: Projects fetched successfully
@@ -131,6 +175,17 @@ exports.getProjectById = async(req:Request,res:Response)=>{
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/Project'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: integer
+ *                         page:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
  *       400:
  *         description: Bad request
  *         content:
@@ -139,19 +194,35 @@ exports.getProjectById = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //get
-exports.getAllProjects = async(req:Request,res:Response)=>{
-    try{
-          const projects = await ProjectServices.getAllTheProjects();
+exports.getAllProjects = async (req: Request, res: Response) => {
+    try {
+        const search = req.query.search as string;
+        const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
-          return res.status(200).json({
-            success:true,
-            message:"Projects fetched successfully",
-            data:projects
-          })
-    }catch(error){
+        const result = await ProjectServices.getAllTheProjects(search, page, limit);
+
+        // Check if result has pagination metadata
+        if ('pagination' in result) {
+            return res.status(200).json({
+                success: true,
+                message: "Projects fetched successfully",
+                data: result.projects,
+                pagination: result.pagination
+            });
+        }
+
+        // Default response for no pagination
+        return res.status(200).json({
+            success: true,
+            message: "Projects fetched successfully",
+            data: result
+        });
+
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -179,50 +250,52 @@ exports.getAllProjects = async(req:Request,res:Response)=>{
  *         application/json:
  *           schema:
  *             type: object
- *             required: ["projectName", "projectType", "location", "initialStatus", "startDate", "expectedCompletion", "totalBudget", "materialName", "quantity", "notes", "userId"]
  *             properties:
  *               projectName:
  *                 type: string
- *                 maxLength: 255
- *                 example: "Smart Home Project"
  *               projectType:
  *                 type: string
- *                 enum: ["villa", "apartment", "building"]
- *                 example: "villa"
  *               location:
  *                 type: string
- *                 maxLength: 255
- *                 example: "123 Main St, City"
+ *               status:
+ *                 type: string
+ *                 enum: ["Inprogress", "OnHold", "Completed"]
+ *                 description: Update project status (aliases to initialStatus)
  *               initialStatus:
  *                 type: string
- *                 enum: ["Planning", "Inprogress", "OnHold"]
- *                 example: "Planning"
+ *                 description: Original field for status
  *               startDate:
  *                 type: string
  *                 format: date
- *                 example: "2024-01-15"
  *               expectedCompletion:
  *                 type: string
  *                 format: date
- *                 example: "2024-12-31"
  *               totalBudget:
  *                 type: number
- *                 format: decimal
- *                 example: 500000.00
  *               materialName:
  *                 type: string
- *                 maxLength: 255
- *                 example: "Cement"
  *               quantity:
- *                 type: integer
- *                 example: 100
- *               notes:
- *                 type: string
- *                 example: "Additional notes about the project"
- *               userId:
+ *                 type: number
+ *               customerId:
  *                 type: string
  *                 format: uuid
- *                 example: "d1f8ac24-57c1-47aa-ae6a-092de6e55553"
+ *               supervisorId:
+ *                 type: string
+ *                 format: uuid
+ *               projectManager:
+ *                  type: string
+ *               area:
+ *                  type: string
+ *               numberOfFloors:
+ *                  type: number
+ *               priority:
+ *                  type: string
+ *               currency:
+ *                  type: string
+ *               description:
+ *                  type: string
+ *               progress:
+ *                  type: number
  *     responses:
  *       200:
  *         description: Project updated successfully
@@ -243,21 +316,21 @@ exports.getAllProjects = async(req:Request,res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //put
-exports.updateProject = async(req:Request , res:Response)=>{
-    try{
+exports.updateProject = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
 
         const updatedData = await ProjectServices.updateProject(projectId, req.body);
 
         return res.status(200).json({
-            success:true,
-            message:"Project updated successfully",
-            data:updatedData,
+            success: true,
+            message: "Project updated successfully",
+            data: updatedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message : String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
@@ -304,19 +377,145 @@ exports.updateProject = async(req:Request , res:Response)=>{
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //delete
-exports.deleteProject = async(req:Request,res:Response)=>{
-    try{
+exports.deleteProject = async (req: Request, res: Response) => {
+    try {
         const projectId = req.params.projectId;
         const deletedData = await ProjectServices.deleteProject(projectId)
         return res.status(200).json({
-            success:true,
-            message:"Project deleted successfully",
-            data:deletedData,
+            success: true,
+            message: "Project deleted successfully",
+            data: deletedData,
         })
-    }catch(error){
+    } catch (error) {
         return res.status(400).json({
-            success:false,
-            message:error instanceof Error ? error.message: String(error),
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
         })
     }
 }
+
+
+/**
+ * @swagger
+ * /api/project/project-summary:
+ *   get:
+ *     summary: Get project summary for the logged-in user
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Project summary fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         projectId:
+ *                           type: string
+ *                           format: uuid
+ *                         projectName:
+ *                           type: string
+ *                         projectType:
+ *                           type: string
+ *                         location:
+ *                           type: string
+ *                         initialStatus:
+ *                           type: string
+ *                         startDate:
+ *                           type: string
+ *                         expectedCompletion:
+ *                           type: string
+ *                         totalBudget:
+ *                           type: number
+ *                         supervisorName:
+ *                           type: string
+ *                         progress:
+ *                           type: number
+ *       404:
+ *         description: No project found for this user
+ */
+exports.getProjectSummary = async (req: Request, res: Response) => {
+    try {
+        const authReq = req as any;
+        const userId = authReq.user?.userId;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const projectSummary = await ProjectServices.getProjectSummaryForUser(userId);
+
+        if (!projectSummary) {
+            return res.status(404).json({
+                success: false,
+                message: "No project found for this user"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Project summary fetched successfully",
+            data: projectSummary
+        });
+
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
+
+/**
+ * @swagger
+ * /api/project/recent-active:
+ *   get:
+ *     summary: Get 9 most recent active projects (Admin only)
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Recent active projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Project'
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+exports.getRecentActiveProjects = async (req: Request, res: Response) => {
+    try {
+        const projects = await ProjectServices.getRecentActiveProjects();
+
+        return res.status(200).json({
+            success: true,
+            message: "Recent active projects fetched successfully",
+            data: projects
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+
