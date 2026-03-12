@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import { fileUploadService } from "../../services/fileUpload.service";
 import { QuotationStatus, Prisma } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
@@ -11,7 +11,7 @@ export const createQuotation = async (data:
         status: string,
         lineItems?: Array<{ description: string; amount: number }> | null,
         date?: Date | null,
-        projectId: string,
+        projectId?: string | null,
         userId?: string,
         customerName?: string | null,
         createdAt: Date,
@@ -54,18 +54,21 @@ export const createQuotation = async (data:
     }
 
     // Verify project exists
-    const projectExists = await prisma.project.findUnique({
-        where: { projectId: data.projectId },
-        include: { customer: true }
-    });
+    let projectExists = null;
+    if (data.projectId) {
+        projectExists = await prisma.project.findUnique({
+            where: { projectId: data.projectId },
+            include: { customer: true }
+        });
 
-    if (!projectExists) {
-        throw new Error(`Project with ID ${data.projectId} does not exist`);
+        if (!projectExists) {
+            throw new Error(`Project with ID ${data.projectId} does not exist`);
+        }
     }
 
     // Determine User ID
     let userIdToUse = data.userId;
-    if (!userIdToUse && projectExists.customer) {
+    if (!userIdToUse && projectExists?.customer) {
         userIdToUse = projectExists.customer.userId;
     }
 
@@ -80,7 +83,7 @@ export const createQuotation = async (data:
             status: data.status as QuotationStatus,
             lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
             date: dateString,
-            projectId: data.projectId,
+            projectId: data.projectId || null,
             userId: userIdToUse ?? null,
             customerName: data.customerName ?? null,
             fileData: null,
@@ -95,7 +98,7 @@ export const createQuotation = async (data:
 
     // Notify Customer
     if (userIdToUse) {
-        const msg = `New quotation received for project ${projectExists.projectName}`;
+        const msg = projectExists ? `New quotation received for project ${projectExists.projectName}` : `New quotation received.`;
         SocketService.getInstance().emitToUser(userIdToUse, "notification", {
             type: "QUOTATION_RECEIVED",
             message: msg,
