@@ -118,10 +118,9 @@ export const createDailyUpdate = async (
         data.constructionStage === "Interior Walls" ? ConstructionStage.Interior_Walls :
             data.constructionStage as ConstructionStage;
 
-    const statusEnum = (data.status as DailyUpdateStatus) || DailyUpdateStatus.draft;
+    const statusEnum = (data.status as DailyUpdateStatus) || DailyUpdateStatus.pending;
 
     // No stage-locking: supervisors can upload updates for any stage at any time
-
 
     const newDailyUpdate = await prisma.dailyUpdate.create({
         data: {
@@ -137,7 +136,7 @@ export const createDailyUpdate = async (
         }
     });
 
-    // Notify only if NOT a draft
+    // Notify only if NOT a draft (which we don't use anymore by default)
     if (statusEnum !== DailyUpdateStatus.draft) {
         // Notify Admins
         if (projectName) {
@@ -1051,11 +1050,19 @@ export const customerApproveUpdate = async (dailyUpdateId: string, userId: strin
     }
 
     // Determine final status
-    let finalStatus: DailyUpdateStatus = DailyUpdateStatus.Approval_Requested;
-    if (dailyUpdate.adminApproved === true) {
+    let finalStatus: DailyUpdateStatus = dailyUpdate.status;
+    
+    // If it was just pending (normal update), customer feedback approves it immediately
+    if (dailyUpdate.status === DailyUpdateStatus.pending) {
         finalStatus = DailyUpdateStatus.approved;
-    } else if (dailyUpdate.adminApproved === false) {
-        finalStatus = DailyUpdateStatus.rejected;
+    } else {
+        // Dual approval flow (for Approval_Requested)
+        finalStatus = DailyUpdateStatus.Approval_Requested;
+        if (dailyUpdate.adminApproved === true) {
+            finalStatus = DailyUpdateStatus.approved;
+        } else if (dailyUpdate.adminApproved === false) {
+            finalStatus = DailyUpdateStatus.rejected;
+        }
     }
 
     const updatedUpdate = await prisma.dailyUpdate.update({
