@@ -17,6 +17,7 @@ export const createDailyUpdate = async (
     data: {
         constructionStage: string;
         description?: string | null;
+        workCompleted?: string | null;
         projectId?: string | null;
         rawMaterials?: Array<{
             materialName: string;
@@ -30,7 +31,7 @@ export const createDailyUpdate = async (
     supervisorId?: string
 ) => {
     // Validate construction stage
-    const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"];
+    const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing", "Others"];
     if (!validStages.includes(data.constructionStage)) {
         throw new Error(`Invalid construction stage. Must be one of: ${validStages.join(", ")}`);
     }
@@ -126,6 +127,7 @@ export const createDailyUpdate = async (
         data: {
             constructionStage: stageEnum,
             description: data.description || null,
+            workCompleted: data.workCompleted || null,
             projectId: validProjectId,
             rawMaterials: data.rawMaterials ? JSON.stringify(data.rawMaterials) : "[]", // Store as JSON string if your DB expects it or rely on Prisma Json type
             status: statusEnum,
@@ -504,6 +506,7 @@ export const updateDailyUpdate = async (
     updateData: {
         constructionStage?: string;
         description?: string | null;
+        workCompleted?: string | null;
         projectId?: string | null;
         rawMaterials?: Array<{
             materialName: string;
@@ -529,7 +532,7 @@ export const updateDailyUpdate = async (
 
     // Validate and update construction stage if provided
     if (updateData.constructionStage !== undefined) {
-        const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing"];
+        const validStages = ["Foundation", "Framing", "Plumbing & Electrical", "Interior Walls", "Painting", "Finishing", "Others"];
         if (!validStages.includes(updateData.constructionStage)) {
             throw new Error(`Invalid construction stage. Must be one of: ${validStages.join(", ")}`);
         }
@@ -539,6 +542,11 @@ export const updateDailyUpdate = async (
                 updateData.constructionStage as ConstructionStage;
 
         dataToUpdate.constructionStage = stageEnum;
+    }
+
+    // Update workCompleted if provided
+    if (updateData.workCompleted !== undefined) {
+        dataToUpdate.workCompleted = updateData.workCompleted || null;
     }
 
     // Validate and update status if provided
@@ -1476,13 +1484,15 @@ export const markStageComplete = async (projectId: string, stage: string, superv
             return ConstructionStage.Plumbing___Electrical;
         if (clean === "Interior_Walls" || clean === "Interior_walls")
             return ConstructionStage.Interior_Walls;
+        if (clean === "Others")
+            return ConstructionStage.Others;
 
         // Literal match check
         const validValues = Object.values(ConstructionStage);
         if (validValues.includes(clean as ConstructionStage)) return clean as ConstructionStage;
 
         // Fallback or fuzzy match could go here, but let's be strict with a better error
-        throw new Error(`Invalid construction stage: "${s}". Valid stages are: Foundation, Framing, Plumbing & Electrical, Interior Walls, Painting, Finishing`);
+        throw new Error(`Invalid construction stage: "${s}". Valid stages are: Foundation, Framing, Plumbing & Electrical, Interior Walls, Painting, Finishing, Others`);
     };
 
     const stageEnum = normalizeInputStage(stage);
@@ -1543,6 +1553,8 @@ export const approveStage = async (projectId: string, stage: string, userId: str
             return ConstructionStage.Plumbing___Electrical;
         if (clean === "Interior_Walls" || clean === "Interior_walls")
             return ConstructionStage.Interior_Walls;
+        if (clean === "Others")
+            return ConstructionStage.Others;
 
         const validValues = Object.values(ConstructionStage);
         if (validValues.includes(clean as ConstructionStage)) return clean as ConstructionStage;

@@ -52,6 +52,7 @@ enum ConstructionStage {
   Interior_Walls        @map("Interior Walls")
   Painting
   Finishing
+  Others
 
   @@map("daily_updates_constructionstage_enum")
 }
@@ -300,6 +301,7 @@ model DailyUpdate {
   dailyUpdateId     String            @id @default(uuid()) @db.Uuid
   constructionStage ConstructionStage @default(Foundation)
   description       String?           @db.Text
+  workCompleted     String?           @map("work_completed") @db.VarChar(255)
   rawMaterials      Json?             @default("[]")
   imageUrl          String?           @map("image_url") @db.VarChar(500)
   imageName         String?           @map("image_name") @db.VarChar(255)

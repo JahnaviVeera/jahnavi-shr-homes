@@ -113,6 +113,7 @@ export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
         const dailyUpdateData = await DailyUpdatesServices.createDailyUpdate(
             {
                 constructionStage: req.body.constructionStage,
+                workCompleted: req.body.workCompleted || null,
                 description: req.body.description || null,
                 projectId: req.body.projectId || null,
                 rawMaterials: rawMaterials,
@@ -476,6 +477,10 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
 
         if (req.body.constructionStage !== undefined && req.body.constructionStage !== null && req.body.constructionStage !== '') {
             updateData.constructionStage = req.body.constructionStage;
+        }
+
+        if (req.body.workCompleted !== undefined) {
+            updateData.workCompleted = req.body.workCompleted || null;
         }
 
         if (req.body.description !== undefined) {
