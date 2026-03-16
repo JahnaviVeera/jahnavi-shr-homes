@@ -11,6 +11,7 @@ interface TokenPayload {
     userId: string;
     email: string;
     role: string;
+    fullName: string;
 }
 
 /**
@@ -19,7 +20,7 @@ interface TokenPayload {
  * @param email - Admin email
  * @returns JWT token string
  */
-export const generateAdminToken = (userId: string, email: string): string => {
+export const generateAdminToken = (userId: string, email: string, fullName: string): string => {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
@@ -29,7 +30,8 @@ export const generateAdminToken = (userId: string, email: string): string => {
     const payload: TokenPayload = {
         userId,
         email,
-        role: "admin"
+        role: "admin",
+        fullName
     };
 
     const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
@@ -55,21 +57,22 @@ export const generateRefreshToken = (): string => {
  * @param role - User role ("user" or "supervisor")
  * @returns JWT token string
  */
-export const generateUserToken = (userId: string, email: string, role: string): string => {
+export const generateUserToken = (userId: string, email: string, role: string, fullName: string): string => {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
-    if (role !== "customer" && role !== "supervisor") {
-        throw new Error("Invalid role. Must be 'customer' or 'supervisor'");
+    if (role !== "customer" && role !== "supervisor" && role !== "accountant") {
+        throw new Error("Invalid role. Must be 'customer', 'supervisor', or 'accountant'");
     }
 
     const payload: TokenPayload = {
         userId,
         email,
-        role
+        role,
+        fullName
     };
 
     const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";

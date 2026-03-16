@@ -43,7 +43,8 @@ export const createProject = async (data:
         progress?: number,
 
         createdAt?: Date,
-        updatedAt?: Date
+        updatedAt?: Date,
+        createdBy?: string
     }) => {
 
 
@@ -137,6 +138,7 @@ export const createProject = async (data:
 
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdBy: data.createdBy || null,
         }
     });
 
@@ -368,7 +370,8 @@ export const updateProject = async (projectId: string, updateData: {
     description?: string,
     progress?: number,
 
-    updatedAt?: Date
+    updatedAt?: Date,
+    updatedBy?: string
 } | undefined | null) => {
     // Check if updateData is provided
     if (!updateData || Object.keys(updateData).length === 0) {
@@ -383,6 +386,7 @@ export const updateProject = async (projectId: string, updateData: {
 
     const dataToUpdate: Prisma.ProjectUpdateInput = {
         updatedAt: new Date(),
+        updatedBy: updateData.updatedBy || null,
     };
 
     if (updateData.projectName !== undefined) dataToUpdate.projectName = updateData.projectName;

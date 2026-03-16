@@ -1,4 +1,4 @@
-﻿import Prisma from "../../config/prisma.client";
+import Prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
 import { UserRole, UserStatus } from "@prisma/client";
 import { generateAdminToken, generateUserToken, generateRefreshToken } from "../../utils/jwt";
@@ -56,7 +56,7 @@ export const adminLogin = async (email: string, password: string) => {
         // Inactive check removed as status now Tracks lead progress
 
         // 4. Success
-        const accessToken = generateAdminToken(user.userId, user.email);
+        const accessToken = generateAdminToken(user.userId, user.email, user.userName);
         const refreshToken = generateRefreshToken();
 
         // Store Refresh Token (30 days expiry)
@@ -108,7 +108,7 @@ export const userLogin = async (email: string, password: string) => {
     const user = await Prisma.user.findFirst({
         where: {
             email: { equals: trimmedEmail, mode: 'insensitive' },
-            role: UserRole.customer
+            role: { in: [UserRole.customer, UserRole.accountant] }
         },
         select: {
             userId: true,
@@ -137,7 +137,7 @@ export const userLogin = async (email: string, password: string) => {
     // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
-    const accessToken = generateUserToken(user.userId, user.email, user.role);
+    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token (30 days expiry)
@@ -221,7 +221,7 @@ export const supervisorLogin = async (email: string, password: string) => {
     // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
-    const accessToken = generateUserToken(user.userId, user.email, user.role);
+    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token (30 days expiry)
@@ -300,13 +300,13 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
     await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
     // 4. Generate new tokens
-    const { userId, email, role } = storedToken.user;
+    const { userId, email, role, userName } = storedToken.user;
 
     let newAccessToken;
     if (role === 'admin') {
-        newAccessToken = generateAdminToken(userId, email);
+        newAccessToken = generateAdminToken(userId, email, userName);
     } else {
-        newAccessToken = generateUserToken(userId, email, role as string);
+        newAccessToken = generateUserToken(userId, email, role as string, userName);
     }
 
     const newRefreshToken = generateRefreshToken();
@@ -372,7 +372,7 @@ export const adminSignup = async (data: {
     });
 
     // 4. Generate Tokens (Auto-login)
-    const accessToken = generateAdminToken(newAdmin.userId, newAdmin.email);
+    const accessToken = generateAdminToken(newAdmin.userId, newAdmin.email, newAdmin.userName);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token

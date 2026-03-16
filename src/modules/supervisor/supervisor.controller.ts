@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 const SupervisorServices = require("./supervisor.services");
 
 interface AuthenticatedRequest extends Request {
@@ -220,6 +220,16 @@ exports.getSupervisorById = async (req: Request, res: Response) => {
     try {
         const { supervisorId } = req.params;
         const supervisor = await SupervisorServices.getSupervisorById(supervisorId);
+        
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            if (supervisor.projects) {
+                supervisor.projects = supervisor.projects.map((p: any) => {
+                    p.totalBudget = "••••••";
+                    return p;
+                });
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -626,6 +636,16 @@ exports.getAssignedProjectsCount = async (req: Request, res: Response) => {
         const { supervisorId } = req.params;
         const result = await SupervisorServices.getAssignedProjectsCount(supervisorId);
 
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            if (result.projects) {
+                result.projects = result.projects.map((p: any) => {
+                    p.totalBudget = "••••••";
+                    return p;
+                });
+            }
+        }
+
         return res.status(200).json({
             success: true,
             message: "Assigned projects count fetched successfully",
@@ -643,6 +663,16 @@ exports.getAssignedProjects = async (req: Request, res: Response) => {
     try {
         const { supervisorId } = req.params;
         const result = await SupervisorServices.getAssignedProjects(supervisorId);
+
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            if (result.projects) {
+                result.projects = result.projects.map((p: any) => {
+                    p.totalBudget = "••••••";
+                    return p;
+                });
+            }
+        }
 
         return res.status(200).json({
             success: true,

@@ -1,4 +1,4 @@
-﻿import type { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 const UserServices = require("./user.services");
 import { sendEmail } from '../../email/emailService';
 import { passwordChangedEmail } from '../../email/templates/shared/passwordChanged';
@@ -68,7 +68,9 @@ exports.createUser = async (req: Request, res: Response, next: NextFunction) => 
             });
         }
 
-        const userData = await UserServices.createUser(req.body);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const userData = await UserServices.createUser({ ...req.body, createdBy: fullName });
 
         return res.status(201).json({
             success: true,

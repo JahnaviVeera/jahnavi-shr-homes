@@ -116,9 +116,12 @@ exports.createDocument = async (req: MulterRequest, res: Response) => {
             });
         }
 
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
         const documentData = await DocumentServices.createDocument({
             ...req.body,
-            userId: req.body.userId || null
+            userId: req.body.userId || null,
+            createdBy: fullName
         }, file);
 
         // Email customer if document is linked to a project
@@ -601,7 +604,9 @@ exports.updateDocument = async (req: MulterRequest, res: Response) => {
             });
         }
 
-        const updatedDocument = await DocumentServices.updateDocument(documentId, updateData, file || undefined);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const updatedDocument = await DocumentServices.updateDocument(documentId, { ...updateData, updatedBy: fullName }, file || undefined);
 
         return res.status(200).json({
             success: true,

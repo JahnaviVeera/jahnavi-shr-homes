@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const UserController = require("./user.controller");
 const { authenticate, authorizeRoles } = require("../../middleware/auth.middleware");
@@ -11,47 +11,47 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  */
 
 
-router.get("/", authenticate, authorizeRoles("admin"), UserController.getAllUsers);
-router.get("/getallusers", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getAllUsers);
-router.get("/leads/stats", authenticate, authorizeRoles("admin"), UserController.getCustomerLeadsStats);
-router.get("/leads/new", authenticate, authorizeRoles("admin"), UserController.getNewLeads);
-router.get("/leads/closed", authenticate, authorizeRoles("admin"), UserController.getClosedCustomers);
-router.get("/admin/dashboard-stats", authenticate, authorizeRoles("admin"), UserController.getAdminDashboardStats);
+router.get("/", authenticate, authorizeRoles("admin", "accountant"), UserController.getAllUsers);
+router.get("/getallusers", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.getAllUsers);
+router.get("/leads/stats", authenticate, authorizeRoles("admin", "accountant"), UserController.getCustomerLeadsStats);
+router.get("/leads/new", authenticate, authorizeRoles("admin", "accountant"), UserController.getNewLeads);
+router.get("/leads/closed", authenticate, authorizeRoles("admin", "accountant"), UserController.getClosedCustomers);
+router.get("/admin/dashboard-stats", authenticate, authorizeRoles("admin", "accountant"), UserController.getAdminDashboardStats);
 
 
 
 
-router.post("/", authenticate, authorizeRoles("admin"), UserController.createUser);
+router.post("/", authenticate, authorizeRoles("admin", "accountant"), UserController.createUser);
 
 // Admin Account Settings (email, company, contact)
-router.get("/admin/account-settings", authenticate, authorizeRoles("admin"), UserController.getAdminAccountSettings);
+router.get("/admin/account-settings", authenticate, authorizeRoles("admin", "accountant"), UserController.getAdminAccountSettings);
 
-router.put("/admin/account-settings", authenticate, authorizeRoles("admin"), UserController.updateAdminAccountSettings);
+router.put("/admin/account-settings", authenticate, authorizeRoles("admin", "accountant"), UserController.updateAdminAccountSettings);
 
 // Admin General Settings (timezone, currency, language)
-router.get("/admin/general-settings", authenticate, authorizeRoles("admin"), UserController.getAdminGeneralSettings);
+router.get("/admin/general-settings", authenticate, authorizeRoles("admin", "accountant"), UserController.getAdminGeneralSettings);
 
-router.put("/admin/general-settings", authenticate, authorizeRoles("admin"), UserController.updateAdminGeneralSettings);
+router.put("/admin/general-settings", authenticate, authorizeRoles("admin", "accountant"), UserController.updateAdminGeneralSettings);
 
 // Admin Password
-router.post("/admin/change-password", authenticate, authorizeRoles("admin"), UserController.changeAdminPassword);
+router.post("/admin/change-password", authenticate, authorizeRoles("admin", "accountant"), UserController.changeAdminPassword);
 
 
 // Profile Routes
-router.get("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getProfile);
-router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.updateUserProfile);
+router.get("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.getProfile);
+router.put("/profile", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.updateUserProfile);
 router.get("/dashboard-stats", authenticate, authorizeRoles("customer"), UserController.getDashboardStats);
 
-router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.changeUserPassword);
+router.post("/profile/change-password", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.changeUserPassword);
 
 // Customer-specific password change
-router.post("/:userId/change-password", authenticate, authorizeRoles("customer", "admin"), UserController.changeCustomerPassword);
+router.post("/:userId/change-password", authenticate, authorizeRoles("customer", "admin", "accountant"), UserController.changeCustomerPassword);
 
 
-router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.getuserById);
+router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.getuserById);
 
 
-router.put("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer"), UserController.updateUser);
+router.put("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.updateUser);
 
 
 router.delete("/:userId", authenticate, authorizeRoles("admin"), UserController.deleteUser);

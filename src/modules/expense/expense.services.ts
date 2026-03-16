@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import { ExpenseCategory, ExpenseStatus, Prisma } from "@prisma/client";
 
 
@@ -10,6 +10,7 @@ export const createExpense = async (data: {
     description?: string | null;
     status?: string;
     receiptUrl?: string;
+    createdBy?: string;
 }) => {
     // Validate status if provided
     if (data.status !== undefined) {
@@ -70,6 +71,7 @@ export const createExpense = async (data: {
             receiptUrl: data.receiptUrl || null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdBy: data.createdBy || null,
         }
     });
 
@@ -155,8 +157,22 @@ export const getExpenseById = async (expenseId: string) => {
 };
 
 // Get all expenses with optional search
-export const getAllExpenses = async (search?: string) => {
+export const getAllExpenses = async (search?: string, projectId?: string, startDate?: string, endDate?: string) => {
     const whereClause: Prisma.ExpenseWhereInput = {};
+
+    if (projectId) {
+        whereClause.projectId = projectId;
+    }
+
+    if (startDate || endDate) {
+        whereClause.date = {};
+        if (startDate) {
+            whereClause.date.gte = startDate;
+        }
+        if (endDate) {
+            whereClause.date.lte = endDate;
+        }
+    }
 
     if (search) {
         const orConditions: Prisma.ExpenseWhereInput[] = [
@@ -165,7 +181,9 @@ export const getAllExpenses = async (search?: string) => {
         ];
 
         // With array of objects, simple string search on JSON is complex. We'll skip category enum matching.
-
+        if (Object.keys(whereClause).length > 0 && whereClause.OR) {
+             // If OR already exists, we might need to handle it, but here it's fresh
+        }
         whereClause.OR = orConditions;
     }
 
@@ -194,8 +212,25 @@ export const getAllExpenses = async (search?: string) => {
 };
 
 // Get expenses only when a category is added, flattened
-export const getCategoryWiseExpenses = async () => {
+export const getCategoryWiseExpenses = async (projectId?: string, startDate?: string, endDate?: string) => {
+    const whereClause: Prisma.ExpenseWhereInput = {};
+
+    if (projectId) {
+        whereClause.projectId = projectId;
+    }
+
+    if (startDate || endDate) {
+        whereClause.date = {};
+        if (startDate) {
+            whereClause.date.gte = startDate;
+        }
+        if (endDate) {
+            whereClause.date.lte = endDate;
+        }
+    }
+
     const expenses = await prisma.expense.findMany({
+        where: whereClause,
         include: {
             project: { select: { projectName: true } }
         },
@@ -337,6 +372,7 @@ export const updateExpense = async (expenseId: string, updateData: {
     description?: string | null;
     projectId?: string;
     status?: string;
+    updatedBy?: string;
 }) => {
     const expense = await prisma.expense.findUnique({
         where: { expenseId }
@@ -348,6 +384,7 @@ export const updateExpense = async (expenseId: string, updateData: {
 
     const dataToUpdate: Prisma.ExpenseUpdateInput = {
         updatedAt: new Date(),
+        updatedBy: updateData.updatedBy || null,
     };
 
     if (updateData.category !== undefined) {

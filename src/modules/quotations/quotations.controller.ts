@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 import prisma from "../../config/prisma.client";
 const QuotationServices = require("./quotations.services");
 const supervisorService = require("../supervisor/supervisor.services");
@@ -60,6 +60,22 @@ exports.getQuotationsByUserId = async (req: Request, res: Response) => {
         }
 
         const quotations = await QuotationServices.getQuotationsByUserId(userId);
+
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            const maskedQuotations = quotations.map((q: any) => {
+                q.totalAmount = "••••••";
+                if (q.lineItems) {
+                    q.lineItems = q.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
+                }
+                return q;
+            });
+            return res.status(200).json({
+                success: true,
+                message: "Quotations fetched successfully (restricted view)",
+                data: maskedQuotations
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -253,7 +269,10 @@ exports.createQuotation = async (req: MulterRequest, res: Response) => {
             customerName: req.body.customerName || null
         };
 
-        const createdQuotation = await QuotationServices.createQuotation(quotationData, file || undefined);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const quotationWithAudit = { ...quotationData, createdBy: fullName };
+        const createdQuotation = await QuotationServices.createQuotation(quotationWithAudit, file || undefined);
 
         // Email Customer: admin sent them a quotation
         try {
@@ -353,6 +372,19 @@ exports.getQuotationById = async (req: Request, res: Response) => {
         const quotationId = req.params.quotationId as string;
         const quotation = await QuotationServices.getQuotationByQuotationId(quotationId);
 
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            quotation.totalAmount = "••••••";
+            if (quotation.lineItems) {
+                quotation.lineItems = quotation.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
+            }
+            return res.status(200).json({
+                success: true,
+                message: "Quotation fetched successfully (restricted view)",
+                data: quotation
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Quotation fetched successfully",
@@ -441,6 +473,23 @@ exports.getAllQuotations = async (req: RequestWithUser, res: Response) => {
         }
 
         const quotations = await QuotationServices.getAllTheQuotations(supervisorId, customerId);
+        
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            const maskedQuotations = quotations.map((q: any) => {
+                q.totalAmount = "••••••";
+                if (q.lineItems) {
+                    q.lineItems = q.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
+                }
+                return q;
+            });
+            return res.status(200).json({
+                success: true,
+                message: "Quotations fetched successfully (restricted view)",
+                data: maskedQuotations
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Quotations fetched successfully",
@@ -697,7 +746,9 @@ exports.updateQuotation = async (req: MulterRequest, res: Response) => {
             });
         }
 
-        const updatedQuotationData = await QuotationServices.updateQuotation(quotationId, updateData, file || undefined);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const updatedQuotationData = await QuotationServices.updateQuotation(quotationId, { ...updateData, updatedBy: fullName }, file || undefined);
 
         return res.status(200).json({
             success: true,
@@ -753,6 +804,16 @@ exports.getQuotationTotalAmount = async (req: Request, res: Response) => {
     try {
         const quotationId = req.params.quotationId as string;
         const totalAmount = await QuotationServices.getQuotationTotalAmount(quotationId);
+
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            return res.status(200).json({
+                success: true,
+                data: {
+                    totalAmount: "••••••"
+                }
+            });
+        }
 
         return res.status(200).json({
             success: true,

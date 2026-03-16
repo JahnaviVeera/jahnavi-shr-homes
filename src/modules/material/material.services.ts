@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 
 // Create a new material
 export const createMaterial = async (data: {
@@ -9,6 +9,7 @@ export const createMaterial = async (data: {
     date: Date | string;
     notes?: string | null;
     vendor?: string | null;
+    createdBy?: string;
 }, supervisorId?: string) => {
     // Validate required fields
     if (!data.projectId || !data.materialName || data.quantity === undefined || !data.date) {
@@ -71,6 +72,7 @@ export const createMaterial = async (data: {
             vendor: data.vendor || null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdBy: data.createdBy || null,
         }
     });
 
@@ -213,6 +215,7 @@ export const updateMaterial = async (materialId: string, updateData: {
     notes?: string | null;
     vendor?: string | null;
     projectId?: string;
+    updatedBy?: string;
 }, supervisorId?: string) => {
 
     // Parse quantity if provided
@@ -258,6 +261,7 @@ export const updateMaterial = async (materialId: string, updateData: {
 
     const dataToUpdate: any = {
         updatedAt: new Date(),
+        updatedBy: updateData.updatedBy || null,
     };
 
     if (updateData.materialName !== undefined) {

@@ -11,22 +11,22 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  *   description: Project management endpoints
  */
 
-router.post("/createproject", authenticate, authorizeRoles("admin"), projectController.createProject);
-router.post("/", authenticate, authorizeRoles("admin"), projectController.createProject);
+router.post("/createproject", authenticate, authorizeRoles("admin", "accountant"), projectController.createProject);
+router.post("/", authenticate, authorizeRoles("admin", "accountant"), projectController.createProject);
 
-router.put("/updateproject/:projectId", authenticate, authorizeRoles("admin"), projectController.updateProject);
-router.put("/:projectId", authenticate, authorizeRoles("admin"), projectController.updateProject);
+router.put("/updateproject/:projectId", authenticate, authorizeRoles("admin", "accountant"), projectController.updateProject);
+router.put("/:projectId", authenticate, authorizeRoles("admin", "accountant"), projectController.updateProject);
 
-router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin"), projectController.deleteProject);
-router.delete("/:projectId", authenticate, authorizeRoles("admin"), projectController.deleteProject);
+router.delete("/deleteproject/:projectId", authenticate, authorizeRoles("admin", "accountant"), projectController.deleteProject);
+router.delete("/:projectId", authenticate, authorizeRoles("admin", "accountant"), projectController.deleteProject);
 
-router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getProjectById);
-router.get("/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getProjectById);
+router.get("/getproject/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), projectController.getProjectById);
+router.get("/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), projectController.getProjectById);
 
-router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
-router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer"), projectController.getAllProjects);
+router.get("/getallprojects", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), projectController.getAllProjects);
+router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), projectController.getAllProjects);
 
-router.get("/recent-active", authenticate, authorizeRoles("admin"), projectController.getRecentActiveProjects);
+router.get("/recent-active", authenticate, authorizeRoles("admin", "accountant"), projectController.getRecentActiveProjects);
 router.get("/project-summary", authenticate, authorizeRoles("customer"), projectController.getProjectSummary);
 
 export default router;

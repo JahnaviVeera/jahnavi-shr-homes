@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const QuotationController = require("./quotations.controller");
 const upload = require("../../config/multer.config").default;
@@ -30,20 +30,20 @@ router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supe
 
 
 // Get all quotations (Admin, Supervisor, maybe User?)
-router.get("/", authenticate, authorizeRoles("admin", "customer"), QuotationController.getAllQuotations);
+router.get("/", authenticate, authorizeRoles("admin", "customer", "accountant"), QuotationController.getAllQuotations);
 
 
 // Get pending quotations (must be before /:quotationId route)
-router.get("/pending", authenticate, authorizeRoles("admin", "customer"), QuotationController.getPendingQuotations);
+router.get("/pending", authenticate, authorizeRoles("admin", "customer", "accountant"), QuotationController.getPendingQuotations);
 
 // Get quotations by status (must be before /:quotationId route)
-router.get("/status/:status", authenticate, authorizeRoles("admin", "customer"), QuotationController.getQuotationsByStatus);
+router.get("/status/:status", authenticate, authorizeRoles("admin", "customer", "accountant"), QuotationController.getQuotationsByStatus);
 
 // Get quotations by project (must be before /:quotationId route)
-router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationsByProject);
+router.get("/project/:projectId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), QuotationController.getQuotationsByProject);
 
 // Get quotations by user (must be before /:quotationId route)
-router.get("/user/:userId", authenticate, authorizeRoles("admin", "customer"), QuotationController.getQuotationsByUserId);
+router.get("/user/:userId", authenticate, authorizeRoles("admin", "customer", "accountant"), QuotationController.getQuotationsByUserId);
 
 // Approve quotation (User only)
 router.post("/:quotationId/approve", authenticate, authorizeRoles("customer"), QuotationController.approveQuotation);
@@ -52,7 +52,7 @@ router.post("/:quotationId/approve", authenticate, authorizeRoles("customer"), Q
 router.post("/:quotationId/reject", authenticate, authorizeRoles("customer"), QuotationController.rejectQuotation);
 
 // Get quotation by ID
-router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationById);
+router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), QuotationController.getQuotationById);
 
 // Update quotation (Admin only)
 router.put("/:quotationId", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.updateQuotation);

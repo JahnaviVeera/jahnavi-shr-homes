@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 const ProjectServices = require("./project.services");
 
 
@@ -65,7 +65,9 @@ const ProjectServices = require("./project.services");
 exports.createProject = async (req: Request, res: Response) => {
     try {
 
-        const projectData = await ProjectServices.createProject(req.body);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const projectData = await ProjectServices.createProject({ ...req.body, createdBy: fullName });
 
         return res.status(201).json({
             success: true,
@@ -122,6 +124,29 @@ exports.getProjectById = async (req: Request, res: Response) => {
     try {
         const projectId = req.params.projectId;
         const project = await ProjectServices.getProjectByProjectId(projectId);
+        const authReq = req as any;
+
+        if (authReq.user?.role === 'accountant') {
+            // Mask sensitive financial fields for accountant role
+            // Mask at root level
+            project.totalBudget = "••••••";
+            
+            // Mask in budgetSummary if it exists
+            if (project.budgetSummary) {
+                project.budgetSummary.totalBudget = "••••••";
+                project.budgetSummary.totalPaid = "••••••";
+                project.budgetSummary.remainingBalance = "••••••";
+                project.budgetSummary.paymentProgress = "•";
+                project.budgetSummary.totalExpense = "••••••";
+                project.budgetSummary.totalBudgetUsed = "•";
+            }
+            
+            return res.status(200).json({
+                success: true,
+                message: "Project fetched successfully (restricted view)",
+                data: project,
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -213,6 +238,25 @@ exports.getAllProjects = async (req: Request, res: Response) => {
         }
 
         // Default response for no pagination
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            const maskedProjects = (result.projects || result).map((p: any) => {
+                p.totalBudget = "••••••";
+                if (p.budgetSummary) {
+                    p.budgetSummary.totalBudget = "••••••";
+                    p.budgetSummary.totalPaid = "••••••";
+                    p.budgetSummary.remainingBalance = "••••••";
+                }
+                return p;
+            });
+            return res.status(200).json({
+                success: true,
+                message: "Projects fetched successfully (restricted view)",
+                data: maskedProjects,
+                pagination: result.pagination
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Projects fetched successfully",
@@ -320,7 +364,9 @@ exports.updateProject = async (req: Request, res: Response) => {
     try {
         const projectId = req.params.projectId;
 
-        const updatedData = await ProjectServices.updateProject(projectId, req.body);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const updatedData = await ProjectServices.updateProject(projectId, { ...req.body, updatedBy: fullName });
 
         return res.status(200).json({
             success: true,
