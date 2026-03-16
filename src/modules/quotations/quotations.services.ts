@@ -15,7 +15,8 @@ export const createQuotation = async (data:
         userId?: string,
         customerName?: string | null,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        createdBy?: string
     },
     file: {
         buffer: Buffer
@@ -93,6 +94,7 @@ export const createQuotation = async (data:
             fileId: (data as any).fileId ?? null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdBy: (data as any).createdBy || null,
         }
     });
 
@@ -208,7 +210,8 @@ export const updateQuotation = async (quotationId: string, updateData: {
     projectId?: string,
     userId?: string,
     customerName?: string | null,
-    updatedAt?: Date
+    updatedAt?: Date,
+    updatedBy?: string
 }, file?: {
     buffer: Buffer
     originalname: string
@@ -222,6 +225,7 @@ export const updateQuotation = async (quotationId: string, updateData: {
 
     const dataToUpdate: Prisma.QuotationUpdateInput = {
         updatedAt: new Date(),
+        updatedBy: updateData.updatedBy || null,
     };
 
     if (updateData.totalAmount !== undefined) {

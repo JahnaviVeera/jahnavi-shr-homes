@@ -23,6 +23,7 @@ export const createUser = async (data: {
     address?: string | null;
     createdAt: Date;
     updatedAt: Date;
+    createdBy?: string;
 }) => {
     const existingUser = await prisma.user.findFirst({
         where: { email: data.email }
@@ -66,6 +67,7 @@ export const createUser = async (data: {
         address: data.address || null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        createdBy: data.createdBy || null,
     };
 
     const newUser = await prisma.user.create({
@@ -192,6 +194,7 @@ export const updateUser = async (userId: string, updatedUserData: {
     address?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
+    updatedBy?: string;
 }) => {
     const user = await prisma.user.findUnique({ where: { userId } })
 
@@ -201,6 +204,7 @@ export const updateUser = async (userId: string, updatedUserData: {
 
     const dataToUpdate: Prisma.UserUpdateInput = {
         updatedAt: new Date(),
+        updatedBy: updatedUserData.updatedBy || null,
     };
 
     // Only update fields that are provided

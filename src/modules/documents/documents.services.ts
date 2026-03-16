@@ -22,6 +22,7 @@ export const createDocument = async (
         userId?: string;
         createdAt?: Date;
         updatedAt?: Date;
+        createdBy?: string;
     },
     file: {
         buffer: Buffer;
@@ -66,6 +67,7 @@ export const createDocument = async (
         fileId: fileId,
         createdAt: new Date(),
         updatedAt: new Date(),
+        createdBy: data.createdBy || null,
     };
 
     if (data.projectId) {
@@ -307,6 +309,7 @@ export const updateDocument = async (
         projectId?: string | null;
         userId?: string | null;
         updatedAt?: Date;
+        updatedBy?: string;
     },
     file?: {
         buffer: Buffer;
@@ -323,6 +326,7 @@ export const updateDocument = async (
 
     const dataToUpdate: any = {
         updatedAt: new Date(),
+        updatedBy: updateData.updatedBy || null,
     }
 
     // Update document type if provided

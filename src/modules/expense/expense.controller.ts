@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 const ExpenseServices = require("./expense.services");
 import { fileUploadService } from "../../services/fileUpload.service";
 
@@ -91,7 +91,9 @@ exports.createExpense = async (req: MulterRequest, res: Response) => {
             }
         }
 
-        const expenseData = await ExpenseServices.createExpense(expenseDataInput);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const expenseData = await ExpenseServices.createExpense({ ...expenseDataInput, createdBy: fullName });
 
         return res.status(201).json({
             success: true,
@@ -209,8 +211,13 @@ exports.getReceiptByExpenseId = async (req: Request, res: Response) => {
  */
 exports.getAllExpenses = async (req: Request, res: Response) => {
     try {
-        const { search } = req.query;
-        const expenses = await ExpenseServices.getAllExpenses(search as string);
+        const { search, projectId, startDate, endDate } = req.query;
+        const expenses = await ExpenseServices.getAllExpenses(
+            search as string,
+            projectId as string,
+            startDate as string,
+            endDate as string
+        );
 
         return res.status(200).json({
             success: true,
@@ -237,7 +244,12 @@ exports.getAllExpenses = async (req: Request, res: Response) => {
  */
 exports.getCategoryWiseExpenses = async (req: Request, res: Response) => {
     try {
-        const expenses = await ExpenseServices.getCategoryWiseExpenses();
+        const { projectId, startDate, endDate } = req.query;
+        const expenses = await ExpenseServices.getCategoryWiseExpenses(
+            projectId as string,
+            startDate as string,
+            endDate as string
+        );
 
         return res.status(200).json({
             success: true,
@@ -497,7 +509,9 @@ exports.getTotalExpenseAmountByProject = async (req: Request, res: Response) => 
 exports.updateExpense = async (req: Request, res: Response) => {
     try {
         const { expenseId } = req.params;
-        const updatedExpense = await ExpenseServices.updateExpense(expenseId, req.body);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const updatedExpense = await ExpenseServices.updateExpense(expenseId, { ...req.body, updatedBy: fullName });
 
         return res.status(200).json({
             success: true,

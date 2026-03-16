@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import * as authController from "./auth.controller";
 import { authenticate, authorizeRoles } from "../../middleware/auth.middleware";
 
@@ -23,6 +23,8 @@ router.post("/user/login", authController.userLogin);
 
 
 router.post("/supervisor/login", authController.supervisorLogin);
+
+router.post("/accountant/login", authController.userLogin);
 
 router.post("/refresh", authController.refreshAccessToken);
 

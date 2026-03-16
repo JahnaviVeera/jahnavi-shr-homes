@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 const MaterialServices = require("./material.services");
 const supervisorService = require("../supervisor/supervisor.services");
 
@@ -65,7 +65,9 @@ exports.createMaterial = async (req: AuthenticatedRequest, res: Response) => {
             supervisorId = supervisor.supervisorId;
         }
 
-        const materialData = await MaterialServices.createMaterial(req.body, supervisorId);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const materialData = await MaterialServices.createMaterial({ ...req.body, createdBy: fullName }, supervisorId);
 
         return res.status(201).json({
             success: true,
@@ -326,7 +328,9 @@ exports.updateMaterial = async (req: AuthenticatedRequest, res: Response) => {
             supervisorId = supervisor.supervisorId;
         }
 
-        const updatedMaterial = await MaterialServices.updateMaterial(materialId, req.body, supervisorId);
+        const authReq = req as any;
+        const fullName = authReq.user?.fullName || "System";
+        const updatedMaterial = await MaterialServices.updateMaterial(materialId, { ...req.body, updatedBy: fullName }, supervisorId);
 
         return res.status(200).json({
             success: true,
