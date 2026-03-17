@@ -82,7 +82,7 @@ export const createQuotation = async (data:
         data: {
             totalAmount: finalTotalAmount,
             status: data.status as QuotationStatus,
-            lineItems: lineItems.length > 0 ? JSON.stringify(lineItems) : "[]",
+            lineItems: lineItems as any,
             date: dateString,
             projectId: data.projectId || null,
             userId: userIdToUse ?? null,
@@ -120,6 +120,19 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
     // Prefer explicit relation if loaded, otherwise try nested project.customer
     const customer = quotation.user || quotation.project?.customer;
 
+    // Safely parse lineItems if it's stored as a string
+    let lineItems = quotation.lineItems;
+    if (typeof lineItems === 'string') {
+        try {
+            lineItems = JSON.parse(lineItems);
+        } catch (e) {
+            lineItems = [];
+        }
+    }
+    if (!Array.isArray(lineItems)) {
+        lineItems = [];
+    }
+
     return {
         quotationId: quotation.quotationId,
         projectName: quotation.project?.projectName || null,
@@ -127,7 +140,7 @@ const formatQuotationResponse = (quotation: any, index?: number) => {
         customerEmail: customer?.email || null,
         status: quotation.status,
         date: quotation.date || null,
-        lineItems: quotation.lineItems || [],
+        lineItems: lineItems,
         totalAmount: parseFloat(String(quotation.totalAmount || 0)),
         fileName: quotation.fileName || null,
         fileType: quotation.fileType || null,
@@ -242,7 +255,7 @@ export const updateQuotation = async (quotationId: string, updateData: {
 
     if (updateData.lineItems !== undefined) {
         const lineItems = updateData.lineItems || [];
-        dataToUpdate.lineItems = JSON.stringify(lineItems);
+        dataToUpdate.lineItems = lineItems as any;
 
         // Recalculate totalAmount from lineItems if lineItems are updated
         if (updateData.lineItems && updateData.lineItems.length > 0) {

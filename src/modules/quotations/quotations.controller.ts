@@ -65,7 +65,7 @@ exports.getQuotationsByUserId = async (req: Request, res: Response) => {
         if (authReq.user?.role === 'accountant') {
             const maskedQuotations = quotations.map((q: any) => {
                 q.totalAmount = "••••••";
-                if (q.lineItems) {
+                if (Array.isArray(q.lineItems)) {
                     q.lineItems = q.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
                 }
                 return q;
@@ -375,7 +375,7 @@ exports.getQuotationById = async (req: Request, res: Response) => {
         const authReq = req as any;
         if (authReq.user?.role === 'accountant') {
             quotation.totalAmount = "••••••";
-            if (quotation.lineItems) {
+            if (Array.isArray(quotation.lineItems)) {
                 quotation.lineItems = quotation.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
             }
             return res.status(200).json({
@@ -478,7 +478,7 @@ exports.getAllQuotations = async (req: RequestWithUser, res: Response) => {
         if (authReq.user?.role === 'accountant') {
             const maskedQuotations = quotations.map((q: any) => {
                 q.totalAmount = "••••••";
-                if (q.lineItems) {
+                if (Array.isArray(q.lineItems)) {
                     q.lineItems = q.lineItems.map((li: any) => ({ ...li, amount: "••••••" }));
                 }
                 return q;

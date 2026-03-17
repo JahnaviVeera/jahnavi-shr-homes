@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from "express";
+import type { Request, Response } from "express";
 import * as PaymentServices from "./payments.services";
 import * as supervisorService from "../supervisor/supervisor.services";
 import prisma from "../../config/prisma.client";
@@ -402,35 +402,6 @@ exports.updatePayment = async (req: Request, res: Response) => {
         const paymentId = req.params.paymentId as string;
 
         const updatedData = await PaymentServices.updatePayment(paymentId, req.body, req.file as any);
-
-        // Email customer if payment status changed to 'completed'
-        try {
-            if (req.body.paymentStatus === 'completed') {
-                const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
-                const payment = await prisma.payment.findUnique({
-                    where: { paymentId },
-                    include: {
-                        project: {
-                            include: { customer: true }
-                        }
-                    }
-                });
-                if (payment?.project?.customer?.email) {
-                    sendEmail({
-                        to: payment.project.customer.email,
-                        subject: `Payment Confirmed – ShrHomies`,
-                        html: customerPaymentVerifiedEmail({
-                            customerName: payment.project.customer.userName || 'Customer',
-                            amount: String(payment.amount || 0),
-                            projectName: payment.project.projectName,
-                            frontendUrl
-                        })
-                    });
-                }
-            }
-        } catch (emailErr) {
-            console.error('[Email] Failed to send payment verified email:', emailErr);
-        }
 
         return res.status(200).json({
             success: true,

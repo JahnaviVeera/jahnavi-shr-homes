@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import { PaymentMethod, PaymentStatus, PaymentType, Prisma } from "@prisma/client";
 import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import { fileUploadService } from "../../services/fileUpload.service";
@@ -144,30 +144,6 @@ export const createPayment = async (data: {
             updatedAt: new Date(),
         }
     });
-
-    // Notify Admins
-    try {
-        const projectName = project?.projectName || "Unknown Project";
-
-        SocketService.getInstance().emitToRole("admin", "payment_created", {
-            message: `Payment of ${data.amount} received for ${projectName}`,
-            paymentId: newPayment.paymentId
-        });
-
-        await notifyAdmins(`Payment of ${data.amount} received for ${projectName}`, "payment_received");
-    } catch (error) {
-        console.error("Failed to send notification:", error);
-    }
-
-    // Notify Customer
-    if (project && project.customer && project.customer.userId) {
-        SocketService.getInstance().emitToUser(project.customer.userId, "notification", {
-            type: "PAYMENT_RECEIVED",
-            message: `Payment of ${data.amount} received for your project ${project.projectName}`,
-            paymentId: newPayment.paymentId
-        });
-        await notifyUser(project.customer.userId, `Payment of ${data.amount} received for your project ${project.projectName}`, "payment_received");
-    }
 
     return newPayment;
 }
@@ -315,22 +291,6 @@ export const updatePayment = async (paymentId: string, updateData: {
         data: dataToUpdate,
         // Removed include
     });
-
-    // Notify (using fetched project from start, or fetching new one if updated?)
-    // If projectId changed, we should probably fetch new project.
-    let notifyProject = project;
-    if (updateData.projectId && updateData.projectId !== payment.projectId) {
-        notifyProject = await projectService.getProjectById(updateData.projectId);
-    }
-
-    if (notifyProject && notifyProject.customer && notifyProject.customer.userId) {
-        SocketService.getInstance().emitToUser(notifyProject.customer.userId, "notification", {
-            type: "PAYMENT_UPDATED",
-            message: `Payment updated for project ${notifyProject.projectName}`,
-            paymentId: updatedPayment.paymentId
-        });
-        await notifyUser(notifyProject.customer.userId, `Payment updated for project ${notifyProject.projectName}`, "payment_updated");
-    }
 
     return updatedPayment;
 };
