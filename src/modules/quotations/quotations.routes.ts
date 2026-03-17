@@ -16,17 +16,17 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 // ============================================
 
 // Create a new quotation (Admin only)
-router.post("/", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.createQuotation);
+router.post("/", authenticate, authorizeRoles("admin", "accountant"), upload.single("file"), QuotationController.createQuotation);
 
 // ============================================
 // General / User Routes
 // ============================================
 
 // Get total amount of a specific quotation (Authenticated)
-router.get("/:quotationId/total-amount", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationTotalAmount);
+router.get("/:quotationId/total-amount", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), QuotationController.getQuotationTotalAmount);
 
 // Download quotation file (Authenticated)
-router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.downloadQuotation);
+router.get("/:quotationId/download", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), QuotationController.downloadQuotation);
 
 
 // Get all quotations (Admin, Supervisor, maybe User?)
@@ -55,13 +55,13 @@ router.post("/:quotationId/reject", authenticate, authorizeRoles("customer"), Qu
 router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), QuotationController.getQuotationById);
 
 // Update quotation (Admin only)
-router.put("/:quotationId", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.updateQuotation);
+router.put("/:quotationId", authenticate, authorizeRoles("admin", "accountant"), upload.single("file"), QuotationController.updateQuotation);
 
 // Resend quotation (Admin only)
-router.post("/:quotationId/resend", authenticate, authorizeRoles("admin"), QuotationController.resendQuotation);
+router.post("/:quotationId/resend", authenticate, authorizeRoles("admin", "accountant"), QuotationController.resendQuotation);
 
 // Delete quotation (Admin only)
-router.delete("/:quotationId", authenticate, authorizeRoles("admin"), QuotationController.deleteQuotation);
+router.delete("/:quotationId", authenticate, authorizeRoles("admin", "accountant"), QuotationController.deleteQuotation);
 
 export default router;
 

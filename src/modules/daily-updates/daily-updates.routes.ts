@@ -64,8 +64,8 @@ router.get("/:dailyUpdateId/video", authenticate, authorizeRoles("admin", "super
 router.put("/:dailyUpdateId/request-approval", authenticate, authorizeRoles("supervisor"), DailyUpdatesController.requestApprovalForDailyUpdate);
 
 // Admin Approval/Rejection
-router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("admin"), DailyUpdatesController.adminApproveUpdate);
-router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("admin"), DailyUpdatesController.adminRejectUpdate);
+router.put("/:dailyUpdateId/approve", authenticate, authorizeRoles("admin", "accountant"), DailyUpdatesController.adminApproveUpdate);
+router.put("/:dailyUpdateId/reject", authenticate, authorizeRoles("admin", "accountant"), DailyUpdatesController.adminRejectUpdate);
 
 // Customer Approval/Rejection
 router.put("/:dailyUpdateId/customer-approve", authenticate, authorizeRoles("customer"), DailyUpdatesController.customerApproveUpdate);

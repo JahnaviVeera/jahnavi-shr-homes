@@ -293,38 +293,51 @@ export const updateUser = async (userId: string, updatedUserData: {
 
     // General Settings
     if (updatedUserData.timezone !== undefined) {
-        let tzValue: any = updatedUserData.timezone;
-        // Map Display String to Enum Key if necessary
-        const timeZoneMap: Record<string, any> = {
-            "Eastern Time (ET)": Timezone.ET,
-            "Central Time (CT)": Timezone.CT,
-            "Mountain Time (MT)": Timezone.MT,
-            "Pacific Time (PT)": Timezone.PT,
-            "UTC": Timezone.UTC
-        };
-        if (timeZoneMap[tzValue]) {
-            tzValue = timeZoneMap[tzValue];
+        if (!updatedUserData.timezone || updatedUserData.timezone.trim() === "") {
+            dataToUpdate.timezone = null;
+        } else {
+            let tzValue: any = updatedUserData.timezone;
+            // Map Display String to Enum Key if necessary
+            const timeZoneMap: Record<string, any> = {
+                "Eastern Time (ET)": Timezone.ET,
+                "Central Time (CT)": Timezone.CT,
+                "Mountain Time (MT)": Timezone.MT,
+                "Pacific Time (PT)": Timezone.PT,
+                "UTC": Timezone.UTC
+            };
+            if (timeZoneMap[tzValue]) {
+                tzValue = timeZoneMap[tzValue];
+            }
+            dataToUpdate.timezone = tzValue as Timezone;
         }
-        dataToUpdate.timezone = tzValue as Timezone;
     }
 
     if (updatedUserData.currency !== undefined) {
-        let currValue: any = updatedUserData.currency;
-        const currencyMap: Record<string, any> = {
-            "USD ($)": Currency.USD,
-            "EUR (€)": Currency.EUR,
-            "GBP (£)": Currency.GBP,
-            "USD": Currency.USD // Handle simpler cases too
-        };
-        if (currencyMap[currValue]) {
-            currValue = currencyMap[currValue];
+        if (!updatedUserData.currency || updatedUserData.currency.trim() === "") {
+            dataToUpdate.currency = null;
+        } else {
+            let currValue: any = updatedUserData.currency;
+            const currencyMap: Record<string, any> = {
+                "USD ($)": Currency.USD,
+                "EUR (€)": Currency.EUR,
+                "GBP (£)": Currency.GBP,
+                "INR (₹)": Currency.INR,
+                "USD": Currency.USD // Handle simpler cases too
+            };
+            if (currencyMap[currValue]) {
+                currValue = currencyMap[currValue];
+            }
+            dataToUpdate.currency = currValue as Currency;
         }
-        dataToUpdate.currency = currValue as Currency;
     }
 
     if (updatedUserData.language !== undefined) {
-        // Enums match strings mostly, but good to cast safely
-        dataToUpdate.language = updatedUserData.language as Language;
+        if (!updatedUserData.language || updatedUserData.language.trim() === "") {
+            dataToUpdate.language = null;
+        } else {
+            // Enums match strings mostly, but good to cast safely
+            dataToUpdate.language = updatedUserData.language as Language;
+        }
     }
 
     if (updatedUserData.address !== undefined) dataToUpdate.address = updatedUserData.address;
@@ -533,19 +546,19 @@ export const getClosedCustomersList = async () => {
     });
 
     // 2. Format to the specific structure requested by the frontend:
-    // { projectId, projectName, createdAt, customer: { userId, userName, email, contact } }
+    // With spread we make sure all fields like status, estimatedInvestment etc are passed
     return inactiveCustomers.map(user => {
+        const { password, ...userDetails } = user;
         const latestProject = user.projects[0];
         
         return {
+            ...latestProject,
+            ...userDetails,
             projectId: latestProject?.projectId || null,
             projectName: latestProject?.projectName || "No Project Assigned",
             createdAt: latestProject?.createdAt || user.createdAt,
             customer: {
-                userId: user.userId,
-                userName: user.userName,
-                email: user.email,
-                contact: user.contact
+                ...userDetails
             }
         };
     });

@@ -552,6 +552,19 @@ exports.getRecentActiveProjects = async (req: Request, res: Response) => {
     try {
         const projects = await ProjectServices.getRecentActiveProjects();
 
+        const authReq = req as any;
+        if (authReq.user?.role === 'accountant') {
+            const maskedProjects = projects.map((p: any) => {
+                p.totalBudget = "••••••";
+                return p;
+            });
+            return res.status(200).json({
+                success: true,
+                message: "Recent active projects fetched successfully (restricted view)",
+                data: maskedProjects
+            });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Recent active projects fetched successfully",

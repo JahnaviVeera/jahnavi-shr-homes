@@ -54,7 +54,7 @@ router.get("/:userId", authenticate, authorizeRoles("admin", "supervisor", "cust
 router.put("/:userId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), UserController.updateUser);
 
 
-router.delete("/:userId", authenticate, authorizeRoles("admin"), UserController.deleteUser);
+router.delete("/:userId", authenticate, authorizeRoles("admin", "accountant"), UserController.deleteUser);
 
 
 router.post("/:userId/approve-supervisor", authenticate, authorizeRoles("customer"), UserController.approveSupervisor);
