@@ -146,9 +146,17 @@ export const createDailyUpdate = async (
                 message: `New daily update submitted for ${projectName}`,
                 dailyUpdateId: newDailyUpdate.dailyUpdateId
             });
+            SocketService.getInstance().emitToRole("accountant", "daily_update_created", {
+                message: `New daily update submitted for ${projectName}`,
+                dailyUpdateId: newDailyUpdate.dailyUpdateId
+            });
             await notifyAdmins(`New daily update submitted for ${projectName}`, "daily_update");
         } else {
             SocketService.getInstance().emitToRole("admin", "daily_update_created", {
+                message: `New daily update submitted`,
+                dailyUpdateId: newDailyUpdate.dailyUpdateId
+            });
+            SocketService.getInstance().emitToRole("accountant", "daily_update_created", {
                 message: `New daily update submitted`,
                 dailyUpdateId: newDailyUpdate.dailyUpdateId
             });
@@ -285,6 +293,10 @@ export const createAdminDailyUpdate = async (
 
     // Notify Admins
     SocketService.getInstance().emitToRole("admin", "admin_daily_update_created", {
+        message: `New Admin daily update submitted for ${projectName}`,
+        dailyUpdateId: newDailyUpdate.dailyUpdateId
+    });
+    SocketService.getInstance().emitToRole("accountant", "admin_daily_update_created", {
         message: `New Admin daily update submitted for ${projectName}`,
         dailyUpdateId: newDailyUpdate.dailyUpdateId
     });

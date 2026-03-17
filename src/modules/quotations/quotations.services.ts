@@ -488,6 +488,13 @@ export const approveQuotation = async (quotationId: string, userId: string, feed
             feedback: feedback
         });
 
+        SocketService.getInstance().emitToRole("accountant", "quotation_status", {
+            status: "APPROVED",
+            message: notifMessage,
+            quotationId: updatedQuotation.quotationId,
+            feedback: feedback
+        });
+
         await notifyAdmins(notifMessage, "quotation_approval");
     } catch (error) {
         console.error("Failed to send notification:", error);
@@ -562,6 +569,12 @@ export const rejectQuotation = async (quotationId: string, userId: string, feedb
         const userName = customer?.userName || "Customer";
 
         SocketService.getInstance().emitToRole("admin", "quotation_status", {
+            status: "REJECTED",
+            message: `Quotation for ${projectName} has been REJECTED by ${userName}`,
+            quotationId: updatedQuotation.quotationId
+        });
+
+        SocketService.getInstance().emitToRole("accountant", "quotation_status", {
             status: "REJECTED",
             message: `Quotation for ${projectName} has been REJECTED by ${userName}`,
             quotationId: updatedQuotation.quotationId

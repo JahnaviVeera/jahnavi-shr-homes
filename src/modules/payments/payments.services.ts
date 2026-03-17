@@ -145,6 +145,23 @@ export const createPayment = async (data: {
         }
     });
 
+    // Notify Admins and Accountants
+    try {
+        const notifMessage = `New payment of ${data.amount} received for project ${project.projectName}`;
+        SocketService.getInstance().emitToRole("admin", "payment_created", {
+            message: notifMessage,
+            paymentId: newPayment.paymentId
+        });
+        // Also emit to accountant role specifically for socket
+        SocketService.getInstance().emitToRole("accountant", "payment_created", {
+            message: notifMessage,
+            paymentId: newPayment.paymentId
+        });
+        await notifyAdmins(notifMessage, "payment_received");
+    } catch (e) {
+        console.error("Failed to notify admins of new payment", e);
+    }
+
     return newPayment;
 }
 
@@ -291,6 +308,22 @@ export const updatePayment = async (paymentId: string, updateData: {
         data: dataToUpdate,
         // Removed include
     });
+
+    // Notify Admins and Accountants
+    try {
+        const notifMessage = `Payment for project ${project?.projectName || 'Project'} has been updated`;
+        SocketService.getInstance().emitToRole("admin", "payment_updated", {
+            message: notifMessage,
+            paymentId: updatedPayment.paymentId
+        });
+        SocketService.getInstance().emitToRole("accountant", "payment_updated", {
+            message: notifMessage,
+            paymentId: updatedPayment.paymentId
+        });
+        await notifyAdmins(notifMessage, "payment_updated");
+    } catch (e) {
+        console.error("Failed to notify admins of payment update", e);
+    }
 
     return updatedPayment;
 };

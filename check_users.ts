@@ -1,11 +1,15 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from "./src/config/prisma.client";
 
-async function checkUsers() {
-    const users = await prisma.user.findMany();
-    console.log('Total Users:', users.length);
-    console.log('Users:', JSON.stringify(users, null, 2));
-    await prisma.$disconnect();
+async function main() {
+  const users = await prisma.user.findMany({
+    select: {
+      userId: true,
+      userName: true,
+      role: true,
+      email: true
+    }
+  });
+  console.log(JSON.stringify(users, null, 2));
 }
 
-checkUsers();
+main().catch(console.error).finally(() => prisma.$disconnect());

@@ -84,21 +84,26 @@ export const createNotification = async (userId: string, message: string, type?:
     return notification;
 };
 
-// Notify all admins
+// Notify all admins and accountants
 export const notifyAdmins = async (message: string, type?: string) => {
-    // Find all admins
-    const admins = await prisma.user.findMany({
-        where: { role: "admin" } // Using string "admin" to match UserRole enum if mapped, or direct literal
+    // Find all admins and accountants
+    const recipients = await prisma.user.findMany({
+        where: {
+            OR: [
+                { role: "admin" },
+                { role: "accountant" }
+            ]
+        }
     });
 
-    if (admins.length === 0) return;
+    if (recipients.length === 0) return;
 
-    // Create notifications for all admins
+    // Create notifications for all admins and accountants
     // Using Promise.all for parallel execution
-    await Promise.all(admins.map(admin =>
+    await Promise.all(recipients.map(recipient =>
         prisma.notification.create({
             data: {
-                userId: admin.userId,
+                userId: recipient.userId,
                 message,
                 type: type || null
             }

@@ -1,6 +1,6 @@
 import prisma from "../../config/prisma.client";
 import { ProjectStatus, ProjectType, Prisma, DailyUpdateStatus, ConstructionStage, PaymentStatus, UserStatus } from "@prisma/client";
-import { notifyUser } from "../notifications/notifications.services";
+import { notifyAdmins, notifyUser } from "../notifications/notifications.services";
 import { sendEmail } from '../../email/emailService';
 import { supervisorProjectAssignedEmail } from '../../email/templates/supervisor/projectAssigned';
 import { adminProjectAssignedEmail } from '../../email/templates/admin/projectAssigned';
@@ -158,8 +158,15 @@ export const createProject = async (data:
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Notify Admin
-    SocketService.getInstance().emitToRole("admin", "project_created", newProject);
+    // Notify Admins and Accountants
+    try {
+        const notifMessage = `New project created: ${newProject.projectName}`;
+        SocketService.getInstance().emitToRole("admin", "project_created", newProject);
+        SocketService.getInstance().emitToRole("accountant", "project_created", newProject);
+        await notifyAdmins(notifMessage, "project_created");
+    } catch (e) {
+        console.error("Failed to notify admins of new project", e);
+    }
 
     // Notify Supervisor
     if (supervisor) {
