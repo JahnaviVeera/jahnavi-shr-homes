@@ -30,7 +30,6 @@ router.post("/:quotationId/approve", authenticate, authorizeRoles("customer"), Q
 
 // Reject quotation (User only)
 router.post("/:quotationId/reject", authenticate, authorizeRoles("customer"), QuotationController.rejectQuotation);
-
 router.get("/:quotationId", authenticate, authorizeRoles("admin", "supervisor", "customer"), QuotationController.getQuotationById);
 router.put("/:quotationId", authenticate, authorizeRoles("admin"), upload.single("file"), QuotationController.updateQuotation);
 router.post("/:quotationId/resend", authenticate, authorizeRoles("admin"), QuotationController.resendQuotation);
