@@ -62,7 +62,6 @@ export const createPayment = async (data: {
     buffer: Buffer;
     originalname: string;
     mimetype: string;
-    mimetype: string;
 }) => {
     // Parse paymentBreakup if it's a string
     let parsedBreakup = data.paymentBreakup;
