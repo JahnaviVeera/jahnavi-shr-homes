@@ -99,6 +99,50 @@ export const getAllPurchases = async (projectId?: string, startDate?: string, en
     }));
 };
 
+// Fetch purchases for multiple projects at once (used when a supervisor has no specific projectId filter)
+export const getAllPurchasesForProjects = async (projectIds: string[], startDate?: string, endDate?: string) => {
+    if (!projectIds || projectIds.length === 0) {
+        return [];
+    }
+
+    const whereClause: any = {
+        projectId: { in: projectIds }
+    };
+
+    if (startDate || endDate) {
+        whereClause.dateOfPurchase = {};
+        if (startDate) {
+            whereClause.dateOfPurchase.gte = startDate;
+        }
+        if (endDate) {
+            whereClause.dateOfPurchase.lte = endDate;
+        }
+    }
+
+    const purchases = await prisma.purchase.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" }
+    });
+
+    return purchases.map((p: any) => ({
+        id: p.id,
+        projectId: p.projectId,
+        materialName: p.materialName,
+        price: Number(p.price),
+        vendorDetails: p.vendorDetails,
+        dateOfPurchase: p.dateOfPurchase,
+        quantity: p.quantity ? Number(p.quantity) : undefined,
+        unit: p.unit,
+        transportAmt: p.transportAmt != null ? Number(p.transportAmt) : undefined,
+        vendorPay: p.vendorPay != null ? Number(p.vendorPay) : undefined,
+        totalPrice: p.totalPrice != null ? Number(p.totalPrice) : undefined,
+        dueAmount: p.dueAmount != null ? Number(p.dueAmount) : undefined,
+        createdAt: p.createdAt,
+        createdBy: p.createdBy,
+        updatedBy: p.updatedBy
+    }));
+};
+
 export const updatePurchase = async (
     id: number,
     data: {

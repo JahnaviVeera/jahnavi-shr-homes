@@ -61,6 +61,8 @@ router.post("/:userId/approve-supervisor", authenticate, authorizeRoles("custome
 
 
 router.post("/:userId/reject-supervisor", authenticate, authorizeRoles("customer"), UserController.rejectSupervisor);
+router.patch("/:userId/regenerate-password", authenticate, authorizeRoles("admin", "accountant"), UserController.regeneratePassword);
 
 export default router;
+
 

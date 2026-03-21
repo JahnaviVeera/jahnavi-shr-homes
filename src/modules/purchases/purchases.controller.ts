@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as PurchaseServices from "./purchases.services";
+import prisma from "../../config/prisma.client";
 
 export const createPurchase = async (req: Request, res: Response) => {
     try {
@@ -37,7 +38,49 @@ export const createPurchase = async (req: Request, res: Response) => {
 
 export const getAllPurchases = async (req: Request, res: Response) => {
     try {
-        const { projectId, startDate, endDate } = req.query;
+        const authReq = req as any;
+        let { projectId, startDate, endDate } = req.query;
+
+        // If the caller is a supervisor, scope to their assigned projects only
+        if (authReq.user?.role === 'supervisor') {
+            const supervisorRecord = await prisma.supervisor.findUnique({
+                where: { userId: authReq.user.userId },
+                select: { supervisorId: true }
+            });
+
+            if (!supervisorRecord) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Supervisor record not found"
+                });
+            }
+
+            // Fetch all projects assigned to this supervisor
+            const assignedProjects = await prisma.project.findMany({
+                where: { supervisorId: supervisorRecord.supervisorId },
+                select: { projectId: true }
+            });
+
+            const assignedProjectIds = assignedProjects.map((p: { projectId: string }) => p.projectId);
+
+            // If a specific projectId was requested, ensure it is one of their assigned ones
+            if (projectId && !assignedProjectIds.includes(projectId as string)) {
+                // The requested project is not assigned to this supervisor — return empty
+                return res.status(200).json({ success: true, data: [] });
+            }
+
+            // Restrict to assigned projects (use provided projectId if it is valid, else all assigned ones)
+            if (!projectId) {
+                // No specific project requested — return all purchases across their assigned projects
+                const purchases = await PurchaseServices.getAllPurchasesForProjects(
+                    assignedProjectIds,
+                    startDate as string,
+                    endDate as string
+                );
+                return res.status(200).json({ success: true, data: purchases });
+            }
+        }
+
         const purchases = await PurchaseServices.getAllPurchases(
             projectId as string,
             startDate as string,

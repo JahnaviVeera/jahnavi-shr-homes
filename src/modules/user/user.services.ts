@@ -235,53 +235,6 @@ export const updateUser = async (userId: string, updatedUserData: {
             throw new Error(`Invalid status value: "${updatedUserData.status}". Expected one of: pending, inprogress, completed`);
         }
         
-        // ─── LEAD TO CUSTOMER CONVERSION LOGIC ─────────────────────────────────
-        // If status is changing from 'pending' to 'inprogress', handle project activation
-        if (user.status === UserStatus.pending && normalisedStatus === UserStatus.inprogress) {
-            // 1. Check if a project already exists for this user
-            const existingProject = await prisma.project.findFirst({
-                where: { customerId: userId }
-            });
-
-            if (existingProject) {
-                // Update existing project to 'Inprogress'
-                await prisma.project.update({
-                    where: { projectId: existingProject.projectId },
-                    data: { initialStatus: 'Inprogress' }
-                });
-            } else {
-                // 2. Automatically create a new project if none exists
-                // Use default dates: today to +6 months
-                const startDate = new Date();
-                const expectedCompletion = new Date();
-                expectedCompletion.setMonth(expectedCompletion.getMonth() + 6);
-                
-                const formatDate = (d: Date): string => d.toISOString().split('T')[0] ?? "";
-
-                await prisma.project.create({
-                    data: {
-                        projectName: `${user.userName}'s Project`,
-                        projectType: 'villa', // Default type
-                        location: user.location || "To be specified",
-                        initialStatus: 'Inprogress',
-                        startDate: formatDate(startDate),
-                        expectedCompletion: formatDate(expectedCompletion),
-                        totalBudget: user.estimatedInvestment || 0,
-                        materialName: "To be decided",
-                        quantity: 0,
-                        notes: user.notes || "",
-                        description: user.description || user.requirements || "",
-                        customerId: userId,
-                        // Priority and Currency defaults are handled by Schema
-                    }
-                });
-            }
-            
-            // 3. Clear notes as requested for conversion
-            dataToUpdate.notes = "";
-        }
-        // ───────────────────────────────────────────────────────────────────────
-
         dataToUpdate.status = normalisedStatus;
     }
     if (updatedUserData.estimatedInvestment !== undefined) dataToUpdate.estimatedInvestment = updatedUserData.estimatedInvestment;
@@ -852,4 +805,32 @@ export const changeCustomerPassword = async (
     });
 
     return { success: true, message: "Customer password updated successfully" };
+};
+export const regeneratePassword = async (userId: string) => {
+    const user = await prisma.user.findUnique({ where: { userId } });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    // Generate a secure random password (10 characters)
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let newPassword = "";
+    for (let i = 0; i < 10; i++) {
+        newPassword += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user record
+    await prisma.user.update({
+        where: { userId },
+        data: {
+            password: hashedPassword,
+            updatedAt: new Date()
+        }
+    });
+
+    return { success: true, newPassword };
 };

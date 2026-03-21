@@ -260,7 +260,8 @@ export const getCategoryWiseExpenses = async (projectId?: string, startDate?: st
                         date: exp.date,
                         amount: cat.amount !== undefined ? parseFloat(cat.amount) : parseFloat(exp.amount.toString()),
                         workerName: cat.workerName || "",
-                        paymentMode: cat.paymentMode || ""
+                        paymentMode: cat.paymentMode || "",
+                        createdBy: exp.createdBy || ""
                     });
                 }
             });

@@ -1,4 +1,4 @@
-﻿import prisma from "../../config/prisma.client";
+import prisma from "../../config/prisma.client";
 import * as bcrypt from "bcrypt";
 import { SupervisorStatus, UserRole, Prisma, UserStatus } from "@prisma/client";
 import { notifyUser } from "../notifications/notifications.services";
@@ -608,6 +608,9 @@ export const getAssignedProjects = async (supervisorId: string) => {
         include: {
             customer: true,
             dailyUpdates: {
+                orderBy: { createdAt: 'desc' }
+            },
+            materials: {
                 orderBy: { createdAt: 'desc' }
             }
         },

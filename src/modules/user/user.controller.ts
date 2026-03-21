@@ -1570,3 +1570,19 @@ exports.changeCustomerPassword = async (req: AuthRequest, res: Response) => {
         });
     }
 };
+exports.regeneratePassword = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.params.userId;
+        const result = await UserServices.regeneratePassword(userId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Password regenerated successfully",
+            data: {
+                newPassword: result.newPassword
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+};

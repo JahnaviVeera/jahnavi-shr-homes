@@ -78,6 +78,7 @@ exports.createExpense = async (req: MulterRequest, res: Response) => {
         const expenseDataInput = { ...rest, category };
 
         // Handle File Upload if provided
+        let receiptUploadWarning: string | null = null;
         if (req.file) {
             try {
                 const uploadResult = await fileUploadService.uploadFile({
@@ -86,8 +87,11 @@ exports.createExpense = async (req: MulterRequest, res: Response) => {
                     folder: 'expenses'
                 });
                 expenseDataInput.receiptUrl = uploadResult.publicUrl;
-            } catch (uploadError) {
-                return res.status(500).json({ success: false, message: "Failed to upload receipt file" });
+            } catch (uploadError: any) {
+                // Log the real error so it's visible in server logs for debugging
+                console.error('Receipt upload failed:', uploadError?.message || uploadError);
+                // Non-fatal: proceed with expense creation, but attach a warning
+                receiptUploadWarning = `Receipt could not be uploaded: ${uploadError?.message ?? 'Unknown upload error'}`;
             }
         }
 
@@ -98,6 +102,7 @@ exports.createExpense = async (req: MulterRequest, res: Response) => {
         return res.status(201).json({
             success: true,
             message: "Expense created successfully",
+            ...(receiptUploadWarning && { warning: receiptUploadWarning }),
             data: expenseData,
         });
     } catch (error) {

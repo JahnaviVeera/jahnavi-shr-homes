@@ -13,7 +13,7 @@ const { authorizeRoles } = require("../../middleware/auth.middleware");
 
 // Add token middleware if they are using it
 router.post("/", authenticate, authorizeRoles("admin", "accountant"), PurchaseController.createPurchase);
-router.get("/", authenticate, authorizeRoles("admin", "accountant"), PurchaseController.getAllPurchases);
+router.get("/", authenticate, authorizeRoles("admin", "accountant", "supervisor"), PurchaseController.getAllPurchases);
 router.put("/:id", authenticate, authorizeRoles("admin", "accountant"), PurchaseController.updatePurchase);
 router.patch("/:id", authenticate, authorizeRoles("admin", "accountant"), PurchaseController.updatePurchase);
 
