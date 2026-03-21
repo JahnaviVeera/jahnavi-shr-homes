@@ -528,7 +528,8 @@ export const updateDailyUpdate = async (
         status?: string;
     },
     image?: any,
-    video?: any
+    video?: any,
+    userRole?: string
 ) => {
     const dailyUpdate = await prisma.dailyUpdate.findUnique({
         where: { dailyUpdateId },
@@ -639,20 +640,27 @@ export const updateDailyUpdate = async (
     }
 
     // RESTRICTION: Check if the stage is already approved for this project
+    // BUT allow admins to override this restriction, and allow updating the approved record itself.
     const projectIdForCheck = (updateData.projectId || dailyUpdate.projectId) as string;
     const stageEnumForCheck = (dataToUpdate.constructionStage || dailyUpdate.constructionStage) as ConstructionStage;
 
-    if (projectIdForCheck) {
+    if (projectIdForCheck && userRole !== 'admin') {
         const approvedUpdate = await prisma.dailyUpdate.findFirst({
             where: {
                 projectId: projectIdForCheck,
                 constructionStage: stageEnumForCheck,
-                status: DailyUpdateStatus.approved
+                status: DailyUpdateStatus.approved,
+                NOT: {
+                    dailyUpdateId: dailyUpdateId
+                }
             }
         });
 
-        if (approvedUpdate) {
-            throw new Error(`This stage has already been approved by the customer. You cannot modify updates for an approved stage.`);
+        // Only block if we're trying to set this update to 'approved' OR if it's already 'approved'
+        // AND another approved update already exists for this stage.
+        const targetStatus = (updateData.status as DailyUpdateStatus) || dailyUpdate.status;
+        if (approvedUpdate && targetStatus === DailyUpdateStatus.approved) {
+            throw new Error(`This stage has already been approved by the customer. You cannot have multiple approved updates for an approved stage.`);
         }
     }
 

@@ -530,7 +530,8 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
             dailyUpdateId as string,
             updateData,
             image || undefined,
-            video || undefined
+            video || undefined,
+            req.user?.role
         );
 
         return res.status(200).json({

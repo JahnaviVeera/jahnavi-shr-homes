@@ -115,10 +115,10 @@ interface RequestWithUser extends Request {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //post
-exports.createPayment = async (req: Request, res: Response) => {
+exports.createPayment = async (req: RequestWithUser, res: Response) => {
     try {
-
-        const paymentData = await PaymentServices.createPayment(req.body, req.file);
+        const userRole = req.user?.role;
+        const paymentData = await PaymentServices.createPayment(req.body, userRole, req.file);
 
         return res.status(201).json({
             success: true,
@@ -397,11 +397,12 @@ exports.getAllPayments = async (req: RequestWithUser, res: Response) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 //put
-exports.updatePayment = async (req: Request, res: Response) => {
+exports.updatePayment = async (req: RequestWithUser, res: Response) => {
     try {
         const paymentId = req.params.paymentId as string;
+        const userRole = req.user?.role;
 
-        const updatedData = await PaymentServices.updatePayment(paymentId, req.body, req.file as any);
+        const updatedData = await PaymentServices.updatePayment(paymentId, req.body, userRole, req.file as any);
 
         return res.status(200).json({
             success: true,

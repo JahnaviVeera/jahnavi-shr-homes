@@ -58,9 +58,10 @@ export const createPayment = async (data: {
     recievedBy?: string | null,
     receivedby?: string | null,
     recievedby?: string | null,
-}, file?: {
+}, userRole?: string, file?: {
     buffer: Buffer;
     originalname: string;
+    mimetype: string;
     mimetype: string;
 }) => {
     // Parse paymentBreakup if it's a string
@@ -145,21 +146,23 @@ export const createPayment = async (data: {
         }
     });
 
-    // Notify Admins and Accountants
-    try {
-        const notifMessage = `New payment of ${data.amount} received for project ${project.projectName}`;
-        SocketService.getInstance().emitToRole("admin", "payment_created", {
-            message: notifMessage,
-            paymentId: newPayment.paymentId
-        });
-        // Also emit to accountant role specifically for socket
-        SocketService.getInstance().emitToRole("accountant", "payment_created", {
-            message: notifMessage,
-            paymentId: newPayment.paymentId
-        });
-        await notifyAdmins(notifMessage, "payment_received");
-    } catch (e) {
-        console.error("Failed to notify admins of new payment", e);
+    // Notify Admins and Accountants only if NOT created by admin/accountant
+    if (userRole !== 'admin' && userRole !== 'accountant') {
+        try {
+            const notifMessage = `New payment of ${data.amount} received for project ${project.projectName}`;
+            SocketService.getInstance().emitToRole("admin", "payment_created", {
+                message: notifMessage,
+                paymentId: newPayment.paymentId
+            });
+            // Also emit to accountant role specifically for socket
+            SocketService.getInstance().emitToRole("accountant", "payment_created", {
+                message: notifMessage,
+                paymentId: newPayment.paymentId
+            });
+            await notifyAdmins(notifMessage, "payment_received");
+        } catch (e) {
+            console.error("Failed to notify admins of new payment", e);
+        }
     }
 
     return newPayment;
@@ -180,7 +183,7 @@ export const updatePayment = async (paymentId: string, updateData: {
     receivedby?: string | null,
     recievedby?: string | null,
     updatedAt?: Date
-}, file?: {
+}, userRole?: string, file?: {
     buffer: Buffer;
     originalname: string;
     mimetype: string;
@@ -309,20 +312,22 @@ export const updatePayment = async (paymentId: string, updateData: {
         // Removed include
     });
 
-    // Notify Admins and Accountants
-    try {
-        const notifMessage = `Payment for project ${project?.projectName || 'Project'} has been updated`;
-        SocketService.getInstance().emitToRole("admin", "payment_updated", {
-            message: notifMessage,
-            paymentId: updatedPayment.paymentId
-        });
-        SocketService.getInstance().emitToRole("accountant", "payment_updated", {
-            message: notifMessage,
-            paymentId: updatedPayment.paymentId
-        });
-        await notifyAdmins(notifMessage, "payment_updated");
-    } catch (e) {
-        console.error("Failed to notify admins of payment update", e);
+    // Notify Admins and Accountants only if NOT updated by admin/accountant
+    if (userRole !== 'admin' && userRole !== 'accountant') {
+        try {
+            const notifMessage = `Payment for project ${project?.projectName || 'Project'} has been updated`;
+            SocketService.getInstance().emitToRole("admin", "payment_updated", {
+                message: notifMessage,
+                paymentId: updatedPayment.paymentId
+            });
+            SocketService.getInstance().emitToRole("accountant", "payment_updated", {
+                message: notifMessage,
+                paymentId: updatedPayment.paymentId
+            });
+            await notifyAdmins(notifMessage, "payment_updated");
+        } catch (e) {
+            console.error("Failed to notify admins of payment update", e);
+        }
     }
 
     return updatedPayment;

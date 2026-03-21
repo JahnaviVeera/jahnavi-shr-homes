@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 
 const paymentController = require("./payments.controller");
@@ -12,10 +12,10 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
  *     description: Payment management endpoints
  */
 
-// Admin only routes
-router.post("/createpayment", authenticate, authorizeRoles("admin"), upload.single("file"), paymentController.createPayment);
-router.put("/updatepayment/:paymentId", authenticate, authorizeRoles("admin"), upload.single("file"), paymentController.updatePayment);
-router.delete("/deletepayment/:paymentId", authenticate, authorizeRoles("admin"), paymentController.deletePayment);
+// Admin and Accountant routes
+router.post("/createpayment", authenticate, authorizeRoles("admin", "accountant"), upload.single("file"), paymentController.createPayment);
+router.put("/updatepayment/:paymentId", authenticate, authorizeRoles("admin", "accountant"), upload.single("file"), paymentController.updatePayment);
+router.delete("/deletepayment/:paymentId", authenticate, authorizeRoles("admin", "accountant"), paymentController.deletePayment);
 
 // Public routes (Restricted to authenticated users)
 router.get("/getpayment/:paymentId", authenticate, authorizeRoles("admin", "supervisor", "customer"), paymentController.getPaymentById);
