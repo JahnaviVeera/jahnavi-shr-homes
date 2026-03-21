@@ -12,6 +12,6 @@ export default defineConfig({
         path: "prisma/migrations",
     },
     datasource: {
-        url: "postgresql://postgres:FEPNVAXUKupqkwZCKbDKdCkyWNgrWLLP@caboose.proxy.rlwy.net:58514/railway",
+        url: process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL,
     },
 });
