@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import jwt, { SignOptions } from "jsonwebtoken";
-
-// Ensure dotenv is loaded before accessing environment variables
+import crypto from "crypto";
 import path from "path";
 
 // Ensure environment variables are loaded from project root
@@ -12,35 +11,8 @@ interface TokenPayload {
     email: string;
     role: string;
     fullName: string;
+    tokenVersion: number;
 }
-
-/**
- * Generate JWT token for admin
- * @param userId - Admin user ID
- * @param email - Admin email
- * @returns JWT token string
- */
-export const generateAdminToken = (userId: string, email: string, fullName: string): string => {
-    const secret = process.env.JWT_SECRET;
-
-    if (!secret) {
-        throw new Error("JWT_SECRET is not defined in environment variables");
-    }
-
-    const payload: TokenPayload = {
-        userId,
-        email,
-        role: "admin",
-        fullName
-    };
-
-    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
-
-    const signOptions: SignOptions = { expiresIn: expiresIn as any };
-    return jwt.sign(payload, secret, signOptions);
-};
-
-import crypto from "crypto";
 
 /**
  * Generate Refresh Token (Opaque)
@@ -51,28 +23,62 @@ export const generateRefreshToken = (): string => {
 };
 
 /**
- * Generate JWT token for user or supervisor
- * @param userId - User or Supervisor ID
- * @param email - User email
- * @param role - User role ("user" or "supervisor")
+ * Generate JWT token for admin
+ * @param userId - Admin user ID
+ * @param email - Admin email
+ * @param fullName - Admin full name
+ * @param tokenVersion - Current token version from DB
  * @returns JWT token string
  */
-export const generateUserToken = (userId: string, email: string, role: string, fullName: string): string => {
+export const generateAdminToken = (userId: string, email: string, fullName: string, tokenVersion: number): string => {
     const secret = process.env.JWT_SECRET;
 
     if (!secret) {
         throw new Error("JWT_SECRET is not defined in environment variables");
     }
 
-    if (role !== "customer" && role !== "supervisor" && role !== "accountant") {
-        throw new Error("Invalid role. Must be 'customer', 'supervisor', or 'accountant'");
+    const payload: TokenPayload = {
+        userId,
+        email,
+        role: "admin",
+        fullName,
+        tokenVersion
+    };
+
+    const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";
+
+    const signOptions: SignOptions = { expiresIn: expiresIn as any };
+    return jwt.sign(payload, secret, signOptions);
+};
+
+/**
+ * Generate JWT token for user or supervisor
+ * @param userId - User or Supervisor ID
+ * @param email - User email
+ * @param role - User role ("customer", "supervisor", "accountant")
+ * @param fullName - User full name
+ * @param tokenVersion - Current token version from DB
+ * @returns JWT token string
+ */
+export const generateUserToken = (userId: string, email: string, role: string, fullName: string, tokenVersion: number): string => {
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+        throw new Error("JWT_SECRET is not defined in environment variables");
+    }
+
+    // Role validation
+    const validRoles = ["customer", "supervisor", "accountant", "admin"];
+    if (!validRoles.includes(role)) {
+        throw new Error(`Invalid role: ${role}. Must be one of ${validRoles.join(", ")}`);
     }
 
     const payload: TokenPayload = {
         userId,
         email,
         role,
-        fullName
+        fullName,
+        tokenVersion
     };
 
     const expiresIn = process.env.JWT_ACCESS_EXPIRY || "15m";

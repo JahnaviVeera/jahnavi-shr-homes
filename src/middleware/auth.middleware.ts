@@ -33,7 +33,23 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
             return next(new AppError(401, "Invalid or expired token"));
         }
 
-        // Check if token is blacklisted
+        // Fetch user from database to check token version and status
+        const user = await Prisma.user.findUnique({
+            where: { userId: decoded.userId },
+            select: { userId: true, tokenVersion: true }
+        });
+
+        if (!user) {
+            return next(new AppError(401, "User no longer exists"));
+        }
+
+        // Compare token version in JWT with the one in DB
+        // If they don't match, it means the password was changed or session was invalidated
+        if (decoded.tokenVersion !== user.tokenVersion) {
+            return next(new AppError(401, "Session invalidated. Please log in again."));
+        }
+
+        // Check if token is blacklisted (kept the existing check for specific token logouts)
         const isBlacklisted = await Prisma.tokenBlacklist.findUnique({
             where: { token }
         });

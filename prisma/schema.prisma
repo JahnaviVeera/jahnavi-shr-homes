@@ -187,6 +187,8 @@ model User {
   sentMessages     Message[]      @relation("SentMessages")
   receivedMessages Message[]      @relation("ReceivedMessages")
 
+  tokenVersion        Int        @default(0) @map("token_version")
+
   @@map("users")
 }
 

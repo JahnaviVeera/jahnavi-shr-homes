@@ -52,15 +52,24 @@ export const adminAuthMiddleware = async (req: AuthRequest, res: Response, next:
             });
         }
 
-        // Fetch user from database to get userId
+        // Fetch user from database to get userId and tokenVersion
         const user = await prisma.user.findFirst({
-            where: { email: decoded.email }
+            where: { email: decoded.email },
+            select: { userId: true, tokenVersion: true }
         });
 
         if (!user) {
             return res.status(401).json({
                 success: false,
                 message: "Admin user not found in database."
+            });
+        }
+
+        // Compare token version in JWT with the one in DB
+        if (decoded.tokenVersion !== user.tokenVersion) {
+            return res.status(401).json({
+                success: false,
+                message: "Session invalidated. Please log in again."
             });
         }
 

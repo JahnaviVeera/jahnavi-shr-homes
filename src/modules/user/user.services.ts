@@ -33,6 +33,14 @@ export const createUser = async (data: {
         throw new Error("User already exists with this email");
     }
 
+    const existingUserByContact = await prisma.user.findFirst({
+        where: { contact: data.contact }
+    });
+
+    if (existingUserByContact) {
+        throw new Error("Mobile number already assigned to another user");
+    }
+
     // Hash password if provided
     let hashedPassword = null;
     if (data.password && data.password.trim() !== "") {
@@ -211,7 +219,18 @@ export const updateUser = async (userId: string, updatedUserData: {
     if (updatedUserData.userName !== undefined) dataToUpdate.userName = updatedUserData.userName;
     if (updatedUserData.role !== undefined) dataToUpdate.role = (updatedUserData.role === "user" ? UserRole.customer : updatedUserData.role) as UserRole;
     if (updatedUserData.email !== undefined) dataToUpdate.email = updatedUserData.email;
-    if (updatedUserData.contact !== undefined) dataToUpdate.contact = updatedUserData.contact;
+    if (updatedUserData.contact !== undefined) {
+        const existingUserByContact = await prisma.user.findFirst({
+            where: { 
+                contact: updatedUserData.contact,
+                NOT: { userId: userId }
+            }
+        });
+        if (existingUserByContact) {
+            throw new Error("Mobile number already assigned to another user");
+        }
+        dataToUpdate.contact = updatedUserData.contact;
+    }
     if (updatedUserData.status !== undefined) {
         // Normalise whatever the frontend sends to the exact Prisma UserStatus enum value.
         // The DB enum is: pending | inprogress | completed (all lowercase, no spaces).
@@ -311,6 +330,17 @@ export const updateUser = async (userId: string, updatedUserData: {
         data: dataToUpdate,
     });
 
+    // If password was updated, increment tokenVersion and delete refresh tokens to log out all sessions
+    if (updatedUserData.password !== undefined) {
+        await prisma.user.update({
+            where: { userId },
+            data: { tokenVersion: { increment: 1 } }
+        });
+        await prisma.refreshToken.deleteMany({
+            where: { userId }
+        });
+    }
+
     return updatedUser;
 }
 
@@ -397,8 +427,14 @@ export const changePassword = async (userId: string, currentPassword: string, ne
         where: { userId },
         data: {
             password: hashedPassword,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            tokenVersion: { increment: 1 }
         }
+    });
+
+    // Delete all refresh tokens to log out all sessions
+    await prisma.refreshToken.deleteMany({
+        where: { userId }
     });
 
     return { success: true, message: "Password updated successfully" };
@@ -800,8 +836,14 @@ export const changeCustomerPassword = async (
         where: { userId },
         data: {
             password: hashedPassword,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            tokenVersion: { increment: 1 }
         }
+    });
+
+    // Delete all refresh tokens to log out all sessions
+    await prisma.refreshToken.deleteMany({
+        where: { userId }
     });
 
     return { success: true, message: "Customer password updated successfully" };
@@ -823,13 +865,19 @@ export const regeneratePassword = async (userId: string) => {
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user record
+    // Update user record and increment tokenVersion
     await prisma.user.update({
         where: { userId },
         data: {
             password: hashedPassword,
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            tokenVersion: { increment: 1 }
         }
+    });
+
+    // Delete all refresh tokens to log out all sessions
+    await prisma.refreshToken.deleteMany({
+        where: { userId }
     });
 
     return { success: true, newPassword };

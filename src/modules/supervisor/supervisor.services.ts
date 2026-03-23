@@ -30,6 +30,24 @@ export const createSupervisor = async (data: {
         throw new Error("User already exists with this email");
     }
 
+    // Check if phone number is already assigned to any user
+    const existingUserByPhone = await prisma.user.findFirst({
+        where: { contact: data.phoneNumber }
+    });
+
+    if (existingUserByPhone) {
+        throw new Error("Mobile number already assigned to another user");
+    }
+
+    // Check if phone number is already assigned to any supervisor
+    const existingSupervisorByPhone = await prisma.supervisor.findFirst({
+        where: { phoneNumber: data.phoneNumber }
+    });
+
+    if (existingSupervisorByPhone) {
+        throw new Error("Mobile number already assigned to another user");
+    }
+
     // Hash password
     if (!data.password || data.password.trim() === "") {
         throw new Error("Password is required for supervisor");
@@ -281,6 +299,34 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
         }
     }
 
+    // Check if phone number is being updated and if it already exists
+    const newPhone = updateData.phoneNumber || updateData.phone;
+    if (newPhone && newPhone !== supervisor.phoneNumber) {
+        // Check in User table
+        const existingUserByPhone = await prisma.user.findFirst({
+            where: { 
+                contact: newPhone,
+                NOT: { userId: supervisor.userId }
+            }
+        });
+
+        if (existingUserByPhone) {
+            throw new Error("Mobile number already assigned to another user");
+        }
+
+        // Check in Supervisor table
+        const existingSupervisorByPhone = await prisma.supervisor.findFirst({
+            where: { 
+                phoneNumber: newPhone,
+                NOT: { supervisorId: supervisorId }
+            }
+        });
+
+        if (existingSupervisorByPhone) {
+            throw new Error("Mobile number already assigned to another user");
+        }
+    }
+    
     const dataToUpdate: Prisma.SupervisorUpdateInput = {
         updatedAt: new Date(),
     };
@@ -304,7 +350,6 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
     }
 
     // Handle Phone Number (support 'phone' or 'phoneNumber')
-    const newPhone = updateData.phoneNumber || updateData.phone;
     if (newPhone !== undefined) {
         dataToUpdate.phoneNumber = newPhone;
         userDataToUpdate.contact = newPhone;
@@ -362,9 +407,20 @@ export const updateSupervisor = async (supervisorId: string, updateData: {
 
     // Sync updates to User table
     if (hasUserUpdates && supervisor.userId) {
+        const userUpdateData: Prisma.UserUpdateInput = { ...userDataToUpdate };
+        
+        // If password was updated, also increment tokenVersion and delete refresh tokens
+        if (updateData.password !== undefined) {
+            userUpdateData.tokenVersion = { increment: 1 };
+            
+            await prisma.refreshToken.deleteMany({
+                where: { userId: supervisor.userId }
+            });
+        }
+
         await prisma.user.update({
             where: { userId: supervisor.userId },
-            data: userDataToUpdate
+            data: userUpdateData
         });
     }
 
@@ -714,14 +770,20 @@ export const changeSupervisorPassword = async (
         }
     });
 
-    // Also update the user table password
+    // Also update the user table password and increment tokenVersion
     if (supervisor.userId) {
         await prisma.user.update({
             where: { userId: supervisor.userId },
             data: {
                 password: hashedPassword,
-                updatedAt: new Date()
+                updatedAt: new Date(),
+                tokenVersion: { increment: 1 }
             }
+        });
+
+        // Delete all refresh tokens to log out all sessions
+        await prisma.refreshToken.deleteMany({
+            where: { userId: supervisor.userId }
         });
     }
 

@@ -326,7 +326,12 @@ export const getDailyUpdateById = async (dailyUpdateId: string) => {
             project: {
                 select: {
                     projectName: true,
-                    location: true
+                    location: true,
+                    supervisor: {
+                        select: {
+                            fullName: true
+                        }
+                    }
                 }
             }
         }
@@ -384,7 +389,17 @@ export const getAllDailyUpdates = async (supervisorId?: string, customerId?: str
     const dailyUpdates = await prisma.dailyUpdate.findMany({
         where,
         orderBy: { createdAt: "desc" },
-        include: { project: true }
+        include: { 
+            project: {
+                include: {
+                    supervisor: {
+                        select: {
+                            fullName: true
+                        }
+                    }
+                }
+            } 
+        }
     });
 
     if (!dailyUpdates) {
@@ -428,7 +443,11 @@ export const getAllAdminDailyUpdates = async (
                     projectId: true,
                     projectName: true,
                     location: true,
-                    supervisorId: true
+                    supervisor: {
+                        select: {
+                            fullName: true
+                        }
+                    }
                 }
             }
         }

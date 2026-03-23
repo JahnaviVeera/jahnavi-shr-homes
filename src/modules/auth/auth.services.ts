@@ -31,7 +31,8 @@ export const adminLogin = async (email: string, password: string) => {
                 role: true,
                 contact: true,
                 companyName: true,
-                status: true
+                status: true,
+                tokenVersion: true
             }
         });
 
@@ -56,7 +57,7 @@ export const adminLogin = async (email: string, password: string) => {
         // Inactive check removed as status now Tracks lead progress
 
         // 4. Success
-        const accessToken = generateAdminToken(user.userId, user.email, user.userName);
+        const accessToken = generateAdminToken(user.userId, user.email, user.userName, user.tokenVersion);
         const refreshToken = generateRefreshToken();
 
         // Store Refresh Token (30 days expiry)
@@ -116,7 +117,8 @@ export const userLogin = async (email: string, password: string) => {
             email: true,
             password: true,
             role: true,
-            status: true
+            status: true,
+            tokenVersion: true
         }
     });
 
@@ -137,7 +139,7 @@ export const userLogin = async (email: string, password: string) => {
     // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
-    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName);
+    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName, user.tokenVersion);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token (30 days expiry)
@@ -194,7 +196,8 @@ export const supervisorLogin = async (email: string, password: string) => {
             email: true,
             password: true,
             role: true,
-            status: true
+            status: true,
+            tokenVersion: true
         }
     });
     console.log(user);
@@ -221,7 +224,7 @@ export const supervisorLogin = async (email: string, password: string) => {
     // Inactive check removed as status now Tracks lead progress
 
     // 4. Success
-    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName);
+    const accessToken = generateUserToken(user.userId, user.email, user.role, user.userName, user.tokenVersion);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token (30 days expiry)
@@ -300,13 +303,13 @@ export const refreshAccessToken = async (incomingRefreshToken: string) => {
     await Prisma.refreshToken.delete({ where: { id: storedToken.id } });
 
     // 4. Generate new tokens
-    const { userId, email, role, userName } = storedToken.user;
+    const { userId, email, role, userName, tokenVersion } = storedToken.user;
 
     let newAccessToken;
     if (role === 'admin') {
-        newAccessToken = generateAdminToken(userId, email, userName);
+        newAccessToken = generateAdminToken(userId, email, userName, tokenVersion);
     } else {
-        newAccessToken = generateUserToken(userId, email, role as string, userName);
+        newAccessToken = generateUserToken(userId, email, role as string, userName, tokenVersion);
     }
 
     const newRefreshToken = generateRefreshToken();
@@ -372,7 +375,7 @@ export const adminSignup = async (data: {
     });
 
     // 4. Generate Tokens (Auto-login)
-    const accessToken = generateAdminToken(newAdmin.userId, newAdmin.email, newAdmin.userName);
+    const accessToken = generateAdminToken(newAdmin.userId, newAdmin.email, newAdmin.userName, newAdmin.tokenVersion);
     const refreshToken = generateRefreshToken();
 
     // Store Refresh Token
