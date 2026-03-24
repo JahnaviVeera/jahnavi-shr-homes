@@ -34,6 +34,11 @@ export type RawMaterial = z.infer<typeof RawMaterialSchema>;
 export type QuantityConsumption = z.infer<typeof QuantityConsumptionSchema>;
 export type LabourWorkers = z.infer<typeof LabourWorkersSchema>;
 
+// Array schemas for plural fields
+export const RawMaterialArraySchema = z.array(RawMaterialSchema);
+export const QuantityConsumptionArraySchema = z.array(QuantityConsumptionSchema);
+export const LabourWorkersArraySchema = z.array(LabourWorkersSchema);
+
 /**
  * Helper to safely parse and validate JSON data
  * @param data - The data to parse (can be string or already parsed object)
@@ -56,9 +61,5 @@ export const validateJsonInput = <T>(data: any, schema: z.ZodSchema<T>): T => {
         }
     }
 
-    if (Array.isArray(parsedData)) {
-        return z.array(schema).parse(parsedData) as unknown as T;
-    }
-    
     return schema.parse(parsedData);
 };

@@ -8,7 +8,7 @@ import { adminDailyUpdateApprovedEmail } from '../../email/templates/admin/daily
 import { adminDailyUpdateRejectedEmail } from '../../email/templates/admin/dailyUpdateRejected';
 import { supervisorDailyUpdateApprovedEmail } from '../../email/templates/supervisor/dailyUpdateApproved';
 import { supervisorDailyUpdateRejectedEmail } from '../../email/templates/supervisor/dailyUpdateRejected';
-import { RawMaterialSchema, QuantityConsumptionSchema, LabourWorkersSchema, validateJsonInput } from "./daily-updates.schema";
+import { RawMaterialArraySchema, QuantityConsumptionArraySchema, LabourWorkersArraySchema, validateJsonInput } from "./daily-updates.schema";
 
 interface RequestWithUser extends Request {
     user?: {
@@ -93,7 +93,7 @@ export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
         let rawMaterials = null;
         if (req.body.rawMaterials) {
             try {
-                rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialSchema);
+                rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialArraySchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
@@ -214,7 +214,7 @@ export const createAdminDailyUpdate = async (req: MulterRequest, res: Response) 
         let quantityConsumption = null;
         if (req.body.quantityConsumption) {
             try {
-                quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionSchema);
+                quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionArraySchema);
             } catch (error) {
                 return res.status(400).json({ 
                     success: false, 
@@ -226,7 +226,7 @@ export const createAdminDailyUpdate = async (req: MulterRequest, res: Response) 
         let labourWorkers = null;
         if (req.body.labourWorkers) {
             try {
-                labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersSchema);
+                labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersArraySchema);
             } catch (error) {
                 return res.status(400).json({ 
                     success: false, 
@@ -495,7 +495,7 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
         // Parse and validate rawMaterials if provided
         if (req.body.rawMaterials !== undefined) {
             try {
-                updateData.rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialSchema);
+                updateData.rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialArraySchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
@@ -507,7 +507,7 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
         // Parse and validate quantityConsumption if provided
         if (req.body.quantityConsumption !== undefined) {
             try {
-                updateData.quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionSchema);
+                updateData.quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionArraySchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
@@ -519,7 +519,7 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
         // Parse and validate labourWorkers if provided
         if (req.body.labourWorkers !== undefined) {
             try {
-                updateData.labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersSchema);
+                updateData.labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersArraySchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
