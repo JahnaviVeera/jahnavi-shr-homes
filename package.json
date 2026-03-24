@@ -3,14 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "npx ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc --outDir dist",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "npx prisma generate && tsc --outDir dist",
     "kill-port": "node src/scripts/kill-port.js",
     "predev": "npm run kill-port",
     "clean": "node -e \"const fs = require('fs'); if (fs.existsSync('dist')) fs.rmSync('dist', { recursive: true, force: true });\"",
     "prebuild": "npm run clean",
-    "build": "npx prisma generate && tsc --outDir dist",
     "start": "node dist/server.js",
     "postinstall": "npx prisma generate",
     "prisma:generate": "npx prisma generate",
@@ -49,7 +47,8 @@
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

@@ -1,8 +1,18 @@
 import { config as dotenvConfig } from "dotenv";
 import path from "path";
 
-// Load .env file from project root
-dotenvConfig({ path: path.join(process.cwd(), ".env") });
+// Try to load .env from the root first, then from the config folder as a backup
+const rootEnv = path.join(process.cwd(), ".env");
+const configEnv = path.join(process.cwd(), "src", "config", ".env");
+
+if (require('fs').existsSync(rootEnv)) {
+    dotenvConfig({ path: rootEnv });
+} else if (require('fs').existsSync(configEnv)) {
+    dotenvConfig({ path: configEnv });
+} else {
+    // If neither exists, just call it normally (might rely on system env vars)
+    dotenvConfig();
+}
 
 interface Config {
     PORT: number;

@@ -8,6 +8,7 @@ import { adminDailyUpdateApprovedEmail } from '../../email/templates/admin/daily
 import { adminDailyUpdateRejectedEmail } from '../../email/templates/admin/dailyUpdateRejected';
 import { supervisorDailyUpdateApprovedEmail } from '../../email/templates/supervisor/dailyUpdateApproved';
 import { supervisorDailyUpdateRejectedEmail } from '../../email/templates/supervisor/dailyUpdateRejected';
+import { RawMaterialSchema, QuantityConsumptionSchema, LabourWorkersSchema, validateJsonInput } from "./daily-updates.schema";
 
 interface RequestWithUser extends Request {
     user?: {
@@ -88,17 +89,15 @@ export const createDailyUpdate = async (req: MulterRequest, res: Response) => {
             image = req.file;
         }
 
-        // Parse rawMaterials if provided as JSON string
+        // Parse and validate rawMaterials if provided
         let rawMaterials = null;
         if (req.body.rawMaterials) {
             try {
-                rawMaterials = typeof req.body.rawMaterials === 'string'
-                    ? JSON.parse(req.body.rawMaterials)
-                    : req.body.rawMaterials;
+                rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialSchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid rawMaterials JSON format"
+                    message: error instanceof Error ? error.message : "Invalid rawMaterials format"
                 });
             }
         }
@@ -215,22 +214,24 @@ export const createAdminDailyUpdate = async (req: MulterRequest, res: Response) 
         let quantityConsumption = null;
         if (req.body.quantityConsumption) {
             try {
-                quantityConsumption = typeof req.body.quantityConsumption === 'string'
-                    ? JSON.parse(req.body.quantityConsumption)
-                    : req.body.quantityConsumption;
+                quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionSchema);
             } catch (error) {
-                return res.status(400).json({ success: false, message: "Invalid quantityConsumption JSON format" });
+                return res.status(400).json({ 
+                    success: false, 
+                    message: error instanceof Error ? error.message : "Invalid quantityConsumption format" 
+                });
             }
         }
 
         let labourWorkers = null;
         if (req.body.labourWorkers) {
             try {
-                labourWorkers = typeof req.body.labourWorkers === 'string'
-                    ? JSON.parse(req.body.labourWorkers)
-                    : req.body.labourWorkers;
+                labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersSchema);
             } catch (error) {
-                return res.status(400).json({ success: false, message: "Invalid labourWorkers JSON format" });
+                return res.status(400).json({ 
+                    success: false, 
+                    message: error instanceof Error ? error.message : "Invalid labourWorkers format" 
+                });
             }
         }
 
@@ -491,44 +492,38 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
             updateData.projectId = req.body.projectId || null;
         }
 
-        // Parse rawMaterials if provided
+        // Parse and validate rawMaterials if provided
         if (req.body.rawMaterials !== undefined) {
             try {
-                updateData.rawMaterials = typeof req.body.rawMaterials === 'string'
-                    ? JSON.parse(req.body.rawMaterials)
-                    : req.body.rawMaterials;
+                updateData.rawMaterials = validateJsonInput(req.body.rawMaterials, RawMaterialSchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid rawMaterials JSON format"
+                    message: error instanceof Error ? error.message : "Invalid rawMaterials format"
                 });
             }
         }
 
-        // Parse quantityConsumption if provided
+        // Parse and validate quantityConsumption if provided
         if (req.body.quantityConsumption !== undefined) {
             try {
-                updateData.quantityConsumption = typeof req.body.quantityConsumption === 'string'
-                    ? JSON.parse(req.body.quantityConsumption)
-                    : req.body.quantityConsumption;
+                updateData.quantityConsumption = validateJsonInput(req.body.quantityConsumption, QuantityConsumptionSchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid quantityConsumption JSON format"
+                    message: error instanceof Error ? error.message : "Invalid quantityConsumption format"
                 });
             }
         }
 
-        // Parse labourWorkers if provided
+        // Parse and validate labourWorkers if provided
         if (req.body.labourWorkers !== undefined) {
             try {
-                updateData.labourWorkers = typeof req.body.labourWorkers === 'string'
-                    ? JSON.parse(req.body.labourWorkers)
-                    : req.body.labourWorkers;
+                updateData.labourWorkers = validateJsonInput(req.body.labourWorkers, LabourWorkersSchema);
             } catch (error) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid labourWorkers JSON format"
+                    message: error instanceof Error ? error.message : "Invalid labourWorkers format"
                 });
             }
         }

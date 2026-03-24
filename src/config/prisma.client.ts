@@ -6,13 +6,18 @@ import logger from "../utils/logger";
 
 const connectionString = config.DATABASE_PUBLIC_URL || config.DATABASE_URL;
 
+if (!connectionString) {
+    logger.error("DATABASE_URL or DATABASE_PUBLIC_URL is missing in environment variables.");
+    throw new Error("Missing database connection string");
+}
+
 const pool = new Pool({
     connectionString,
-    max: 15, // Slightly more conservative than 20 to avoid exhausting Railway limits
-    idleTimeoutMillis: 30000, // 30 seconds (half of Railway's 60s proxy timeout)
-    connectionTimeoutMillis: 20000, // 20 seconds (more time for network latency)
-    maxUses: 1000, // Regularly rotate connections to prevent stale ones
-    ssl: connectionString.includes('localhost') ? false : { rejectUnauthorized: false },
+    max: 15,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 20000,
+    maxUses: 1000,
+    ssl: connectionString.includes('localhost') || connectionString.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
     // TCP Keepalive to keep the connection alive through proxy/firewalls
     // Note: These properties might need @ts-ignore if using older @types/pg
     // @ts-ignore
