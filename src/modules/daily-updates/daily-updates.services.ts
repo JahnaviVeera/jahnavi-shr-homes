@@ -242,6 +242,11 @@ export const createAdminDailyUpdate = async (
             if (!dt || String(dt).trim() === "") {
                 throw new Error("Date is required for each consumption entry");
             }
+
+            const unit = consumption.unit || consumption.Unit;
+            if (!unit || String(unit).trim() === "") {
+                throw new Error("Unit is required for each consumption entry");
+            }
         }
     }
 
@@ -544,6 +549,8 @@ export const updateDailyUpdate = async (
             quantity: number;
             notes?: string;
         }> | null;
+        quantityConsumption?: any[] | null;
+        labourWorkers?: any[] | null;
         status?: string;
     },
     image?: any,
@@ -621,6 +628,38 @@ export const updateDailyUpdate = async (
             dataToUpdate.rawMaterials = JSON.stringify(updateData.rawMaterials);
         } else {
             dataToUpdate.rawMaterials = Prisma.JsonNull;
+        }
+    }
+
+    // Update quantityConsumption if provided
+    if (updateData.quantityConsumption !== undefined) {
+        if (Array.isArray(updateData.quantityConsumption)) {
+            // Validate structure
+            for (const consumption of updateData.quantityConsumption) {
+                if (!consumption.materialName || String(consumption.materialName).trim() === "") {
+                    throw new Error("Material name is required for each consumption entry");
+                }
+                const dt = consumption.date || consumption.Date || consumption.consumptionDate;
+                if (!dt || String(dt).trim() === "") {
+                    throw new Error("Date is required for each consumption entry");
+                }
+                const unit = consumption.unit || consumption.Unit;
+                if (!unit || String(unit).trim() === "") {
+                    throw new Error("Unit is required for each consumption entry");
+                }
+            }
+            dataToUpdate.quantityConsumption = JSON.stringify(updateData.quantityConsumption);
+        } else {
+            dataToUpdate.quantityConsumption = Prisma.JsonNull;
+        }
+    }
+
+    // Update labourWorkers if provided
+    if (updateData.labourWorkers !== undefined) {
+        if (Array.isArray(updateData.labourWorkers)) {
+            dataToUpdate.labourWorkers = JSON.stringify(updateData.labourWorkers);
+        } else {
+            dataToUpdate.labourWorkers = Prisma.JsonNull;
         }
     }
 

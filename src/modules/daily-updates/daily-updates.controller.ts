@@ -505,6 +505,34 @@ export const updateDailyUpdate = async (req: MulterRequest, res: Response) => {
             }
         }
 
+        // Parse quantityConsumption if provided
+        if (req.body.quantityConsumption !== undefined) {
+            try {
+                updateData.quantityConsumption = typeof req.body.quantityConsumption === 'string'
+                    ? JSON.parse(req.body.quantityConsumption)
+                    : req.body.quantityConsumption;
+            } catch (error) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid quantityConsumption JSON format"
+                });
+            }
+        }
+
+        // Parse labourWorkers if provided
+        if (req.body.labourWorkers !== undefined) {
+            try {
+                updateData.labourWorkers = typeof req.body.labourWorkers === 'string'
+                    ? JSON.parse(req.body.labourWorkers)
+                    : req.body.labourWorkers;
+            } catch (error) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid labourWorkers JSON format"
+                });
+            }
+        }
+
         // Handle file upload
         let image: any = undefined;
         let video: any = undefined;
