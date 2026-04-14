@@ -17,13 +17,13 @@ const { authenticate, authorizeRoles } = require("../../middleware/auth.middlewa
 router.get("/", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), SupervisorController.getAllSupervisors);
 
 // Create a new supervisor (Admin only)
-router.post("/", authenticate, authorizeRoles("admin", "accountant"), SupervisorController.createSupervisor);
+router.post("/", authenticate, authorizeRoles("admin"), SupervisorController.createSupervisor);
 
 // Assign project to supervisor (Admin only) - Must come before /:supervisorId route
-router.post("/:supervisorId/assign-project", authenticate, authorizeRoles("admin", "accountant"), SupervisorController.assignProjectToSupervisor);
+router.post("/:supervisorId/assign-project", authenticate, authorizeRoles("admin"), SupervisorController.assignProjectToSupervisor);
 
 // Remove project from supervisor (Admin only) - Must come before /:supervisorId route
-router.delete("/:supervisorId/remove-project", authenticate, authorizeRoles("admin", "accountant"), SupervisorController.removeProjectFromSupervisor);
+router.delete("/:supervisorId/remove-project", authenticate, authorizeRoles("admin"), SupervisorController.removeProjectFromSupervisor);
 
 // Get my profile (Authenticated Supervisor) - Must come before /:supervisorId route
 router.get("/profile", authenticate, authorizeRoles("supervisor"), SupervisorController.getProfile);
@@ -32,7 +32,7 @@ router.get("/profile", authenticate, authorizeRoles("supervisor"), SupervisorCon
 router.put("/profile", authenticate, authorizeRoles("supervisor"), SupervisorController.updateProfile);
 
 // Change supervisor password (Authenticated Supervisor or Admin)
-router.post("/:supervisorId/change-password", authenticate, authorizeRoles("admin", "supervisor", "accountant"), SupervisorController.changeSupervisorPassword);
+router.post("/:supervisorId/change-password", authenticate, authorizeRoles("admin", "supervisor"), SupervisorController.changeSupervisorPassword);
 
 /**
  * @swagger
@@ -161,10 +161,10 @@ router.get("/:supervisorId/assigned-projects", authenticate, authorizeRoles("sup
 router.get("/:supervisorId", authenticate, authorizeRoles("admin", "supervisor", "customer", "accountant"), SupervisorController.getSupervisorById);
 
 // Update supervisor (Admin only)
-router.put("/:supervisorId", authenticate, authorizeRoles("admin", "accountant"), SupervisorController.updateSupervisor);
+router.put("/:supervisorId", authenticate, authorizeRoles("admin"), SupervisorController.updateSupervisor);
 
 // Delete supervisor (Admin only)
-router.delete("/:supervisorId", authenticate, authorizeRoles("admin", "accountant"), SupervisorController.deleteSupervisor);
+router.delete("/:supervisorId", authenticate, authorizeRoles("admin"), SupervisorController.deleteSupervisor);
 
 export default router;
 

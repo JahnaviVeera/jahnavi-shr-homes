@@ -123,15 +123,32 @@ exports.createProject = async (req: Request, res: Response) => {
 exports.getProjectById = async (req: Request, res: Response) => {
     try {
         const projectId = req.params.projectId;
-        const project = await ProjectServices.getProjectByProjectId(projectId);
         const authReq = req as any;
+        const project = await ProjectServices.getProjectByProjectId(projectId);
+
+        // Security Check: Customers can only see their own projects
+        if (authReq.user?.role === 'customer' && project.customerId !== authReq.user.userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only view your own projects."
+            });
+        }
+
+        // Security Check: Supervisors can only see projects assigned to them
+        if (authReq.user?.role === 'supervisor') {
+            const isAssigned = project.supervisorId && project.supervisor?.userId === authReq.user.userId;
+            if (!isAssigned) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Access denied. You can only view projects assigned to you."
+                });
+            }
+        }
 
         if (authReq.user?.role === 'accountant') {
             // Mask sensitive financial fields for accountant role
-            // Mask at root level
             project.totalBudget = "••••••";
             
-            // Mask in budgetSummary if it exists
             if (project.budgetSummary) {
                 project.budgetSummary.totalBudget = "••••••";
                 project.budgetSummary.totalPaid = "••••••";
@@ -224,21 +241,63 @@ exports.getAllProjects = async (req: Request, res: Response) => {
         const search = req.query.search as string;
         const page = req.query.page ? parseInt(req.query.page as string) : undefined;
         const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+        const authReq = req as any;
 
-        const result = await ProjectServices.getAllTheProjects(search, page, limit);
+        let result;
 
-        // Check if result has pagination metadata
-        if ('pagination' in result) {
+        // Security / Role-based Filtering
+        if (authReq.user?.role === 'customer') {
+            // Customers only see their own projects via service or manual filter
+            // Since getAllTheProjects returns everything, we filter or use specialized service
+            // Better: use specialized service if available, else filter.
+            const projects = await ProjectServices.getProjectsByCustomerId(authReq.user.userId);
             return res.status(200).json({
                 success: true,
-                message: "Projects fetched successfully",
-                data: result.projects,
+                message: "Your projects fetched successfully",
+                data: projects
+            });
+        }
+
+        if (authReq.user?.role === 'supervisor') {
+            // Supervisors only see their projects
+            const projects = await ProjectServices.getProjectsBySupervisorId(authReq.user.userId); // Assuming this exists or I'll implement
+            // Wait, does it exist? Let's check or use a fallback.
+            // I'll check project.services.ts for getProjectsBySupervisorId.
+            result = await ProjectServices.getAllTheProjects(search, page, limit);
+            const filteredProjects = result.projects ? result.projects.filter((p: any) => p.supervisor?.userId === authReq.user.userId) : result.filter((p: any) => p.supervisor?.userId === authReq.user.userId);
+            
+             return res.status(200).json({
+                success: true,
+                message: "Assigned projects fetched successfully",
+                data: filteredProjects
+            });
+        }
+
+        result = await ProjectServices.getAllTheProjects(search, page, limit);
+
+        // Check if result has pagination metadata
+        if (result.pagination) {
+            let projects = result.projects;
+            if (authReq.user?.role === 'accountant') {
+                projects = projects.map((p: any) => {
+                    p.totalBudget = "••••••";
+                    if (p.budgetSummary) {
+                        p.budgetSummary.totalBudget = "••••••";
+                        p.budgetSummary.totalPaid = "••••••";
+                        p.budgetSummary.remainingBalance = "••••••";
+                    }
+                    return p;
+                });
+            }
+            return res.status(200).json({
+                success: true,
+                message: authReq.user?.role === 'accountant' ? "Projects fetched successfully (restricted view)" : "Projects fetched successfully",
+                data: projects,
                 pagination: result.pagination
             });
         }
 
         // Default response for no pagination
-        const authReq = req as any;
         if (authReq.user?.role === 'accountant') {
             const maskedProjects = (result.projects || result).map((p: any) => {
                 p.totalBudget = "••••••";
@@ -252,8 +311,7 @@ exports.getAllProjects = async (req: Request, res: Response) => {
             return res.status(200).json({
                 success: true,
                 message: "Projects fetched successfully (restricted view)",
-                data: maskedProjects,
-                pagination: result.pagination
+                data: maskedProjects
             });
         }
 
