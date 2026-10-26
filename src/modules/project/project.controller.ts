@@ -1,6 +1,31 @@
 import type { Request, Response } from "express";
 const ProjectServices = require("./project.services");
 
+/**
+ * Helper function to mask sensitive financial fields for restricted roles
+ */
+const maskProjectFinancials = (project: any) => {
+    if (!project) return project;
+
+    const masked = { ...project };
+    masked.totalBudget = "••••••";
+
+    if (masked.budgetSummary) {
+        masked.budgetSummary = {
+            ...masked.budgetSummary,
+            totalBudget: "••••••",
+            totalPaid: "••••••",
+            remainingBalance: "••••••",
+            paymentProgress: "•",
+            totalExpense: "••••••",
+            totalBudgetUsed: "•"
+        };
+    }
+
+    return masked;
+};
+
+
 
 /**
  * @swagger
@@ -136,7 +161,7 @@ exports.getProjectById = async (req: Request, res: Response) => {
 
         // Security Check: Supervisors can only see projects assigned to them
         if (authReq.user?.role === 'supervisor') {
-            const isAssigned = project.supervisorId && project.supervisor?.userId === authReq.user.userId;
+            const isAssigned = project.supervisorId && project.supervisor && project.supervisor.userId === authReq.user.userId;
             if (!isAssigned) {
                 return res.status(403).json({
                     success: false,
@@ -146,22 +171,12 @@ exports.getProjectById = async (req: Request, res: Response) => {
         }
 
         if (authReq.user?.role === 'accountant') {
-            // Mask sensitive financial fields for accountant role
-            project.totalBudget = "••••••";
-            
-            if (project.budgetSummary) {
-                project.budgetSummary.totalBudget = "••••••";
-                project.budgetSummary.totalPaid = "••••••";
-                project.budgetSummary.remainingBalance = "••••••";
-                project.budgetSummary.paymentProgress = "•";
-                project.budgetSummary.totalExpense = "••••••";
-                project.budgetSummary.totalBudgetUsed = "•";
-            }
+            const maskedProject = maskProjectFinancials(project);
             
             return res.status(200).json({
                 success: true,
                 message: "Project fetched successfully (restricted view)",
-                data: project,
+                data: maskedProject,
             });
         }
 
@@ -279,15 +294,7 @@ exports.getAllProjects = async (req: Request, res: Response) => {
         if (result.pagination) {
             let projects = result.projects;
             if (authReq.user?.role === 'accountant') {
-                projects = projects.map((p: any) => {
-                    p.totalBudget = "••••••";
-                    if (p.budgetSummary) {
-                        p.budgetSummary.totalBudget = "••••••";
-                        p.budgetSummary.totalPaid = "••••••";
-                        p.budgetSummary.remainingBalance = "••••••";
-                    }
-                    return p;
-                });
+                projects = projects.map((p: any) => maskProjectFinancials(p));
             }
             return res.status(200).json({
                 success: true,
@@ -299,15 +306,7 @@ exports.getAllProjects = async (req: Request, res: Response) => {
 
         // Default response for no pagination
         if (authReq.user?.role === 'accountant') {
-            const maskedProjects = (result.projects || result).map((p: any) => {
-                p.totalBudget = "••••••";
-                if (p.budgetSummary) {
-                    p.budgetSummary.totalBudget = "••••••";
-                    p.budgetSummary.totalPaid = "••••••";
-                    p.budgetSummary.remainingBalance = "••••••";
-                }
-                return p;
-            });
+            const maskedProjects = (result.projects || result).map((p: any) => maskProjectFinancials(p));
             return res.status(200).json({
                 success: true,
                 message: "Projects fetched successfully (restricted view)",
@@ -612,10 +611,7 @@ exports.getRecentActiveProjects = async (req: Request, res: Response) => {
 
         const authReq = req as any;
         if (authReq.user?.role === 'accountant') {
-            const maskedProjects = projects.map((p: any) => {
-                p.totalBudget = "••••••";
-                return p;
-            });
+            const maskedProjects = projects.map((p: any) => maskProjectFinancials(p));
             return res.status(200).json({
                 success: true,
                 message: "Recent active projects fetched successfully (restricted view)",
